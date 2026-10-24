@@ -39,12 +39,12 @@ program
   .option("--out <path>", "config file to write (default: <dir>/argos.config.yaml)")
   .option("--report <dir>", "where init-report.md and init-egress.json go", "out")
   .option("--isolation <mode>", "process | container: how the app is started to verify the draft (default: container)")
-  .option("--llm-data <mode>", "none | files: what may be sent to the LLM (default: none until the LLM step exists)")
+  .option("--llm-data <mode>", "none | files: what may be sent to the LLM (default: none). files: the Spring adapter may send masked source of the items it could not link")
   .option("--start <command>", "start command, when it cannot be detected")
   .option("--no-verify", "write the draft without starting the app")
   .option("--force", "overwrite an existing config")
-  .option("--timeout <seconds>", "verification timeout", "120")
-  .action(async (dir: string | undefined, o: { out?: string; report: string; isolation?: string; llmData?: string; start?: string; verify: boolean; force?: boolean; timeout: string }) => {
+  .option("--timeout <seconds>", "verification timeout (default 120; Spring Boot: the build + boot budget of the jvm runtime)")
+  .action(async (dir: string | undefined, o: { out?: string; report: string; isolation?: string; llmData?: string; start?: string; verify: boolean; force?: boolean; timeout?: string }) => {
     try {
       if (o.llmData !== undefined && o.llmData !== "none" && o.llmData !== "files") throw new ConfigError(`--llm-data: expected "none" or "files", got "${o.llmData}"`);
       const r = await runInit({
@@ -56,7 +56,7 @@ program
         start: o.start,
         verify: o.verify,
         force: !!o.force,
-        timeoutMs: Number(o.timeout) * 1000,
+        ...(o.timeout !== undefined ? { timeoutMs: Number(o.timeout) * 1000 } : {}),
       });
       process.exitCode = r.exitCode;
     } catch (e) {
@@ -80,7 +80,7 @@ program
         configPath: o.config,
         checks: o.checks?.split(",").map((c) => c.trim()).filter(Boolean),
         outDir: o.out,
-        timeoutMs: Number(o.timeout) * 1000,
+        ...(o.timeout !== undefined ? { timeoutMs: Number(o.timeout) * 1000 } : {}),
         isolation: parseIsolation(o.isolation),
       });
       process.exitCode = r.exitCode;

@@ -6,6 +6,10 @@ import { buildDraft, type Draft } from "./draft.js";
 import { renderConfig } from "./emit.js";
 import { scanRepo, type RepoFacts } from "./facts.js";
 import { verifyDraft, type Verification } from "./verify.js";
+import { isJvmBuild } from "./spring/detect.js";
+import type { SpringFacts } from "./spring/facts.js";
+import { runSpringInit } from "./spring/index.js";
+import type { LlmClient } from "./spring/llm.js";
 
 export class InitError extends Error {}
 
@@ -24,14 +28,22 @@ export interface InitOptions {
   start?: string;
   timeoutMs?: number;
   log?: (line: string) => void;
+  /** Spring adapter: LLM used to link uncertain items (default: Anthropic when --llm-data files and ANTHROPIC_API_KEY). */
+  llmClient?: LlmClient;
+  /** Spring adapter: replaces the real (docker) verification, for tests. */
+  springVerifier?: (configPath: string, opts: { timeoutMs?: number }) => Promise<Verification>;
 }
 
 export interface InitResult {
   configPath: string;
   reportPath: string;
   egressPath: string;
+  /** express-sqlite (Node) or spring-boot. */
+  adapter: "express-sqlite" | "spring-boot";
   draft: Draft;
-  facts: RepoFacts;
+  facts: RepoFacts | SpringFacts;
+  /** False when nothing usable could be drafted (the report explains why). */
+  configWritten: boolean;
   verification?: Verification;
   /** Seconds from start to a config whose boot and login were verified (or to the written draft with --no-verify). */
   t1Seconds: number;
@@ -50,6 +62,7 @@ export async function runInit(opts: InitOptions): Promise<InitResult> {
   if (existsSync(configPath) && !opts.force) {
     throw new InitError(`${configPath} already exists: it may hold rules a person confirmed. Use --force to overwrite.`);
   }
+  if (isJvmBuild(dir)) return runSpringInit(opts, dir, configPath, log, t0);
   const isolation = opts.isolation ?? "container";
 
   log(`[1/4] scanning ${dir}`);
@@ -76,7 +89,7 @@ export async function runInit(opts: InitOptions): Promise<InitResult> {
   let verification: Verification | undefined;
   if (opts.verify !== false) {
     log(`[3/4] verifying the draft: start the app (${isolation}), log in as each persona`);
-    verification = await verifyDraft(configPath, { isolation, timeoutMs: opts.timeoutMs });
+    verification = await verifyDraft(configPath, { isolation, timeoutMs: opts.timeoutMs ?? 120_000 });
   } else log("[3/4] verification skipped (--no-verify)");
 
   const t1Seconds = Math.round(((Date.now() - t0) / 1000) * 10) / 10;
@@ -90,7 +103,7 @@ export async function runInit(opts: InitOptions): Promise<InitResult> {
   writeFileSync(reportPath, renderInitReport({ facts, draft, verification, t1Seconds, k, configPath, isolation }));
   writeFileSync(egressPath, JSON.stringify({ llm: false, sent: [], masked: 0, note: "no source file was sent anywhere: this draft came from static rules only" }, null, 2) + "\n");
 
-  const result: InitResult = { configPath, reportPath, egressPath, draft, facts, verification, t1Seconds, k, exitCode: verification && !verification.ok ? 1 : 0 };
+  const result: InitResult = { configPath, reportPath, egressPath, adapter: "express-sqlite", configWritten: true, draft, facts, verification, t1Seconds, k, exitCode: verification && !verification.ok ? 1 : 0 };
   summarize(result, log);
   return result;
 }
