@@ -1,0 +1,15 @@
+{
+  "name": "demo-vendor-platform",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Argos demo target with planted access-control and secret-leak flaws. Do not deploy.",
+  "scripts": {
+    "start": "node --no-warnings app.mjs",
+    "seed": "node --no-warnings seed.mjs",
+    "exploit": "bash manual-exploit.sh"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}

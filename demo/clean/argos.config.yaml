@@ -1,0 +1,71 @@
+version: 1
+target:
+  start: "node --no-warnings app.mjs"
+  cwd: "."
+  baseUrl: "http://127.0.0.1:0"
+  readyPath: "/health"
+  env: {}
+seed:
+  schema: "schema.sql"
+  dbPath: "./data.db"
+personas:
+  - name: vendor1
+    org: v1
+    auth: { type: bearer, token: "tok-v1" }
+  - name: vendor2
+    org: v2
+    auth: { type: bearer, token: "tok-v2" }
+  - name: vendor3
+    org: v3
+    auth: { type: bearer, token: "tok-v3" }
+  - name: anonymous
+    auth: { type: none }
+resources:
+  # fixed 1: query scoped by vendor_id
+  - id: dataset-read
+    route: "GET /api/datasets/:id"
+    owner: { table: datasets, column: vendor_id }
+    expect: { owner: allow, other: deny, anonymous: deny }
+  # fixed 3: parameterized LIKE. List is vendor-scoped, so other vendors get 200 with their own rows.
+  - id: dataset-search
+    route: "GET /api/datasets?search="
+    owner: { table: datasets, column: vendor_id }
+    expect: { owner: allow, other: deny, anonymous: deny }
+  # control: correctly scoped
+  - id: dataset-tasks
+    route: "GET /api/datasets/:id/tasks"
+    owner: { table: datasets, column: vendor_id }
+    expect: { owner: allow, other: deny, anonymous: deny }
+  # control: correctly scoped
+  - id: task-read
+    route: "GET /api/tasks/:id"
+    owner: { table: tasks, column: vendor_id }
+    expect: { owner: allow, other: deny, anonymous: deny }
+  # fixed 4: explicit columns, no api_key. Profile stays visible to other vendors.
+  - id: vendor-profile
+    route: "GET /api/vendors/:id"
+    owner: { table: vendors, column: id }
+    expect: { owner: allow, other: allow, anonymous: deny }
+  # fixed 2: auth required, scoped to the caller's vendor. Body: {"datasetId": <id>}.
+  - id: export
+    route: "POST /api/export"
+    safe: true
+    owner: { table: datasets, column: vendor_id }
+    expect: { owner: allow, other: deny, anonymous: deny }
+  # fixed 5: route removed (404)
+  - id: debug-env
+    route: "GET /debug/env"
+    expect: { owner: deny, other: deny, anonymous: deny }
+  - id: health
+    route: "GET /health"
+    public: true
+  - id: products
+    route: "GET /api/products"
+    public: true
+checks: [bola, unauth, sqli, secrets]
+secrets:
+  sensitiveColumns: ["api_key", "token", "secret", "password"]
+  allowOwnerSecretRead: false
+  envCanaries: ["JWT_SECRET", "SECRET_KEY", "API_KEY", "STRIPE_SECRET_KEY"]
+mode: report
+llm: { provider: anthropic, data: files }
