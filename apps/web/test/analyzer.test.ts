@@ -6,7 +6,14 @@ import { extractJson } from '../src/llm.ts';
 import { buildReviewComments, renderSummaryMarkdown, REPORT_MARKER, shouldFail } from '../src/reporter.ts';
 import type { AnalysisResult } from '../src/types.ts';
 
-bindEnv({ POE_API_KEY: '' });
+bindEnv({ ANTHROPIC_API_KEY: '' });
+
+/** An Anthropic Messages API response carrying `text` as its single text block. */
+const claude = (text: string) =>
+  new Response(
+    JSON.stringify({ id: 'msg_test', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', content: [{ type: 'text', text }], stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 } }),
+    { headers: { 'content-type': 'application/json' } },
+  );
 
 test('extractJson: 코드펜스/앞뒤 텍스트 허용', () => {
   assert.deepEqual(extractJson('설명입니다\n```json\n{"a":1}\n```'), { a: 1 });
@@ -15,8 +22,8 @@ test('extractJson: 코드펜스/앞뒤 텍스트 허용', () => {
 });
 
 test('LLM 응답을 정적 결과와 병합하고 오탐을 제외한다', async (t) => {
-  bindEnv({ POE_API_KEY: 'test-key' });
-  t.after(() => bindEnv({ POE_API_KEY: '' }));
+  bindEnv({ ANTHROPIC_API_KEY: 'test-key' });
+  t.after(() => bindEnv({ ANTHROPIC_API_KEY: '' }));
   const llmReply = {
     summary: 'BOLA 1건',
     findings: [
@@ -25,7 +32,7 @@ test('LLM 응답을 정적 결과와 병합하고 오탐을 제외한다', async
     ],
     static_review: [{ id: 'S2', verdict: 'false_positive', reason: '라우트 정의일 뿐' }],
   };
-  t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({ choices: [{ message: { content: '```json\n' + JSON.stringify(llmReply) + '\n```' } }] })));
+  t.mock.method(globalThis, 'fetch', async () => claude('```json\n' + JSON.stringify(llmReply) + '\n```'));
 
   const { analyze } = await import('../src/analyzer.ts');
   const patch = "@@ -0,0 +1,3 @@\n+router.get('/docs/:id', async (req, res) => {\n+  const d = await Doc.findById(req.params.id);\n+});";
@@ -55,8 +62,8 @@ test('reporter: diff 범위 밖 라인은 인라인 코멘트에서 제외, 실�
 });
 
 test('LLM 결과 하나가 같은 이슈의 정적 결과 여러 개를 흡수한다', async (t) => {
-  bindEnv({ POE_API_KEY: 'test-key' });
-  t.after(() => bindEnv({ POE_API_KEY: '' }));
+  bindEnv({ ANTHROPIC_API_KEY: 'test-key' });
+  t.after(() => bindEnv({ ANTHROPIC_API_KEY: '' }));
   const llmReply = {
     summary: '',
     findings: [
@@ -65,7 +72,7 @@ test('LLM 결과 하나가 같은 이슈의 정적 결과 여러 개를 흡수�
     ],
     static_review: [],
   };
-  t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(llmReply) } }] })));
+  t.mock.method(globalThis, 'fetch', async () => claude(JSON.stringify(llmReply)));
   const { analyze } = await import('../src/analyzer.ts');
   const patch = [
     '@@ -0,0 +1,4 @@',

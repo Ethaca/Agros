@@ -162,7 +162,7 @@ export async function analyze(input: AnalyzeInput): Promise<AnalysisResult> {
     }),
   );
 
-  result.llm = { used: true, model: config.poe.model, ...(errors.length ? { error: errors.join('; ') } : {}) };
+  result.llm = { used: true, model: config.claude.model, ...(errors.length ? { error: errors.join('; ') } : {}) };
   if (batches.length > MAX_BATCHES) errors.push(`변경이 너무 커서 ${MAX_BATCHES}개 배치까지만 LLM 분석했습니다`);
 
   // 정적 결과: LLM 이 false_positive 로 본 것은 제외, 판정이 없으면 그대로 유지

@@ -26,10 +26,9 @@ export const config = {
   get failOn() { return env('FAIL_ON', 'high') as Severity | 'never'; },
   get minConfidence() { return Number(env('MIN_CONFIDENCE', '0.5')); },
   get lang() { return env('REPORT_LANG', 'ko') as 'ko' | 'en'; },
-  poe: {
-    get apiKey() { return env('POE_API_KEY'); },
-    get model() { return env('POE_MODEL', 'claude-sonnet-5.5'); },
-    get baseUrl() { return env('POE_BASE_URL', 'https://api.poe.com/v1').replace(/\/$/, ''); },
+  claude: {
+    get apiKey() { return env('ANTHROPIC_API_KEY'); },
+    get model() { return env('ANTHROPIC_MODEL', 'claude-sonnet-5-5'); },
   },
   /** 선택: GitHub 권고 수집용 토큰. 없으면 비인증 한도(시간당 60회) 안에서 동작 */
   get radarGithubToken() { return env('RADAR_GITHUB_TOKEN'); },

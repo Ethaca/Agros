@@ -5,8 +5,8 @@
 GITHUB_CLIENT_ID=
 GITHUB_CLIENT_SECRET=
 
-# Poe API (https://poe.com/api/keys) — 비워두면 정적 룰만으로 검사
-POE_API_KEY=
+# Anthropic Claude API (https://console.anthropic.com/settings/keys) — 비워두면 정적 룰만으로 검사
+ANTHROPIC_API_KEY=
 
 # 세션 서명 / 토큰 암호화 키: `openssl rand -hex 32` 로 각각 생성
 SESSION_SECRET=

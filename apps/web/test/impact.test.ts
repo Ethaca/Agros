@@ -10,7 +10,15 @@ import { renderFindingBody, renderSummaryMarkdown } from '../src/reporter.ts';
 import type { Finding } from '../src/types.ts';
 import { renderFindings } from '../src/ui/server.tsx';
 
-bindEnv({ POE_API_KEY: '' });
+bindEnv({ ANTHROPIC_API_KEY: '' });
+
+/** An Anthropic Messages API response carrying `text` as its single text block. */
+const claude = (text: string) =>
+  new Response(
+    JSON.stringify({ id: 'msg_test', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', content: [{ type: 'text', text }], stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 } }),
+    { headers: { 'content-type': 'application/json' } },
+  );
+
 const files = splitUnifiedDiff(readFileSync(new URL('../examples/order-sharing.diff', import.meta.url), 'utf8'));
 const sample: Finding = {
   id: 'F1', source: 'llm', file: 'src/routes/orders.ts', line: 6, severity: 'high', category: 'API1',
@@ -79,12 +87,12 @@ test('키 없이도 영향 경로·학습·검증 방법이 나오고 의도가 
 });
 
 test('AI 분석은 변경 목적과 관련 파일을 받고 실제로 전달한 코드만 인용한다', async (t) => {
-  bindEnv({ POE_API_KEY: 'test-key' });
-  t.after(() => bindEnv({ POE_API_KEY: '' }));
-  let request: { messages: { role: string; content: string }[] } | undefined;
+  bindEnv({ ANTHROPIC_API_KEY: 'test-key' });
+  t.after(() => bindEnv({ ANTHROPIC_API_KEY: '' }));
+  let request: { system?: string; messages: { role: string; content: string }[] } | undefined;
   t.mock.method(globalThis, 'fetch', async (_input: unknown, init: RequestInit) => {
     request = JSON.parse(String(init.body));
-    return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({
+    return claude(JSON.stringify({
       findings: [{ ...sample, confidence: 0.95, impact: {
         steps: [{ kind: 'change', explanation: '목적을 확인했습니다.', evidence: [
           { file: sample.file, side: 'before', line: 7, quote: 'ownerId: req.user.id' },
@@ -97,18 +105,18 @@ test('AI 분석은 변경 목적과 관련 파일을 받고 실제로 전달한 
         verification: ['정상 공유 토큰으로 배송 상태를 조회합니다.', '토큰 없는 요청과 개인정보 필드 노출을 검사합니다.'],
         verificationStatus: 'verified',
       } }], static_review: [],
-    }) } }] }));
+    }));
   });
   const result = await analyze({ files, intent: '배송 상태 공유', relatedContents: new Map([
     ['src/middleware/auth.ts', 'export const auth = requireAuth;'],
     ['src/hidden.ts', 'SECRET_CONTEXT' + 'x'.repeat(12_000)],
   ]) });
-  const prompt = request!.messages[1].content;
+  const prompt = request!.messages[0].content;
   assert.match(prompt, /배송 상태 공유/);
   assert.match(prompt, /B7\s+-.*ownerId: req.user.id/);
   assert.match(prompt, /L1 export const auth = requireAuth;/);
   assert.doesNotMatch(prompt, /SECRET_CONTEXT/);
-  assert.match(request!.messages[0].content, /untrusted DATA/);
+  assert.match(request!.system!, /untrusted DATA/);
   const finding = result.findings.find((f) => f.title === sample.title)!;
   assert.equal(finding.impact!.steps[1].evidence.length, 1);
   assert.equal(finding.impact!.steps[1].evidence[0].file, 'src/middleware/auth.ts');
@@ -126,24 +134,24 @@ test('영향 설명·인용·의도의 HTML은 실행 가능한 태그로 출력
 });
 
 test('AI 호출 실패 시 정적 탐지와 학습 자료가 유지된다', async (t) => {
-  bindEnv({ POE_API_KEY: 'test-key' });
-  t.after(() => bindEnv({ POE_API_KEY: '' }));
-  t.mock.method(globalThis, 'fetch', async () => new Response('model unavailable', { status: 400 }));
+  bindEnv({ ANTHROPIC_API_KEY: 'test-key' });
+  t.after(() => bindEnv({ ANTHROPIC_API_KEY: '' }));
+  t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message: 'model unavailable' } }), { status: 400, headers: { 'content-type': 'application/json' } }));
   const result = await analyze({ files });
-  assert.match(result.llm.error!, /Poe API 400/);
+  assert.match(result.llm.error!, /400/);
   assert.ok(result.findings.length);
   assert.ok(result.findings.every((f) => f.impact?.source === 'rule'));
   assert.match(renderFindings(result), /이번 변경에서 배울 점/);
 });
 
 test('응답의 잘못된 분류와 변경되지 않은 파일은 학습 화면을 깨뜨리거나 새 이슈를 만들지 않는다', async (t) => {
-  bindEnv({ POE_API_KEY: 'test-key' });
-  t.after(() => bindEnv({ POE_API_KEY: '' }));
+  bindEnv({ ANTHROPIC_API_KEY: 'test-key' });
+  t.after(() => bindEnv({ ANTHROPIC_API_KEY: '' }));
   const reply = { findings: [
     { ...sample, category: '__proto__', confidence: 0.9 },
     { ...sample, file: 'src/middleware/auth.ts', title: '변경되지 않은 파일', confidence: 0.9 },
   ] };
-  t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(reply) } }] })));
+  t.mock.method(globalThis, 'fetch', async () => claude(JSON.stringify(reply)));
   const result = await analyze({ files, relatedContents: new Map([['src/middleware/auth.ts', 'export const auth = requireAuth;']]) });
   assert.equal(result.findings.some((f) => String(f.category) === '__proto__'), false);
   assert.equal(result.findings.some((f) => f.file === 'src/middleware/auth.ts'), false);

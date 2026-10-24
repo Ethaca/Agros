@@ -342,7 +342,7 @@ app.post('/radar/threats/:id/pref', requireUser, async (c) => {
   return radarBack(c, tid, 'pref');
 });
 
-app.get('/healthz', (c) => c.json({ ok: true, llm: !!config.poe.apiKey, model: config.poe.model }));
+app.get('/healthz', (c) => c.json({ ok: true, llm: !!config.claude.apiKey, model: config.claude.model }));
 
 app.onError((err, c) => {
   console.error('[http]', err);

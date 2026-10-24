@@ -21,7 +21,7 @@ GitHub OAuth 로 로그인하고 레포에서 **보호 켜기**만 누르면, �
 PR opened/synchronize ──webhook──▶ Argos
                                     ├─ 1. 변경 파일 + diff + (head 기준) 전체 파일 내용 수집
                                     ├─ 2. 정적 룰 엔진: 후보를 넓게 탐지 (21개 룰, 다국어)
-                                    ├─ 3. Poe LLM: 문맥 분석 + 정적 결과 오탐 판정 + 추가 탐지
+                                    ├─ 3. Claude LLM: 문맥 분석 + 정적 결과 오탐 판정 + 추가 탐지
                                     └─ 4. PR 에 게시
                                          ├─ 요약 코멘트 (푸시할 때마다 같은 코멘트를 갱신)
                                          ├─ 인라인 리뷰 코멘트 (해당 라인에)
@@ -43,7 +43,7 @@ PR opened/synchronize ──webhook──▶ Argos
 | L3 공식 | GHSA · OSV · 벤더 권고 | + 버전업 PR 초안 (Dockerfile, 런타임 선언 등 한 줄 치환이 가능한 위치) |
 | L4 악용 중 | L3 + KEV 등재 또는 독립된 악용 보고 2건 | + 최상단 고정, `urgent` 라벨 |
 
-- **안전장치:** 커뮤니티 원문은 LLM 에 데이터로만 전달하고, LLM 이 지목한 대상은 글에 실제로 이름이 나온 보호 대상일 때만, CVE 는 원문에 있을 때만 받아들입니다. PR 의 패치 버전은 공식 권고에서만 가져오고, 파일이 수집 이후 바뀌었으면 만들지 않습니다. PoC 는 내려받거나 실행하지 않습니다. `POE_API_KEY` 가 없으면 키워드 규칙으로 L1 신호만 만듭니다.
+- **안전장치:** 커뮤니티 원문은 LLM 에 데이터로만 전달하고, LLM 이 지목한 대상은 글에 실제로 이름이 나온 보호 대상일 때만, CVE 는 원문에 있을 때만 받아들입니다. PR 의 패치 버전은 공식 권고에서만 가져오고, 파일이 수집 이후 바뀌었으면 만들지 않습니다. PoC 는 내려받거나 실행하지 않습니다. `ANTHROPIC_API_KEY` 가 없으면 키워드 규칙으로 L1 신호만 만듭니다.
 - 비인증 GitHub API 한도(시간당 60회) 안에서 동작하며, `RADAR_GITHUB_TOKEN` 을 넣으면 한도가 늘어납니다.
 
 ## 탐지 항목
@@ -62,7 +62,7 @@ PR opened/synchronize ──webhook──▶ Argos
 | Injection / Secrets | 문자열 결합 SQL, NoSQL 연산자 주입, 하드코딩된 키 |
 
 정적 룰은 일부러 넓게 잡습니다. LLM 은 라우터와 미들웨어 구성까지 보고 각 후보를 `confirmed` 또는 `false_positive` 로 판정하고, 정적 룰이 놓친 문맥 의존 BOLA 도 찾아냅니다.
-`POE_API_KEY` 가 없으면 정적 룰만으로 동작합니다.
+`ANTHROPIC_API_KEY` 가 없으면 정적 룰만으로 동작합니다.
 
 ## 배포 (Cloudflare Workers)
 
@@ -77,7 +77,7 @@ D1 데이터베이스와 큐는 첫 `wrangler deploy` 때 자동으로 생성되
    ```bash
    npx wrangler secret put GITHUB_CLIENT_ID
    npx wrangler secret put GITHUB_CLIENT_SECRET
-   npx wrangler secret put POE_API_KEY          # https://poe.com/api/keys
+   npx wrangler secret put ANTHROPIC_API_KEY    # https://console.anthropic.com/settings/keys
    npx wrangler secret put SESSION_SECRET       # openssl rand -hex 32
    npx wrangler secret put ENCRYPTION_KEY       # openssl rand -hex 32 (바꾸면 저장된 토큰을 복호화할 수 없음)
    ```
@@ -128,7 +128,7 @@ npm run scan -- examples/order-sharing.diff --no-llm --json  # 영향 경로를 
 | `src/learning.ts` | 보안 분류별 핵심 개념, 오해, 질문과 해설, 검토 항목 |
 | `src/context.ts` | 저장소 파일 목록을 기준으로 상대 import의 실제 경로 해석 |
 | `src/rules.ts` | 정적 룰 정의 |
-| `src/llm.ts` | Poe OpenAI 호환 API 클라이언트 (재시도, JSON 추출) |
+| `src/llm.ts` | Anthropic Claude Messages API 클라이언트 (공식 SDK, JSON 추출) |
 | `src/reporter.ts` | PR 코멘트 마크다운, 인라인 코멘트, status |
 | `src/github.ts` | GitHub REST 클라이언트 |
 | `src/db.ts` | D1 쿼리 + 스키마 자동 생성 |

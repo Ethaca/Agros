@@ -1,36 +1,41 @@
+import Anthropic from '@anthropic-ai/sdk';
 import { config } from './config.ts';
 
 export interface ChatMessage { role: 'system' | 'user' | 'assistant'; content: string }
 
-export const llmEnabled = () => !!config.poe.apiKey;
+export const llmEnabled = () => !!config.claude.apiKey;
 
-/** Poe OpenAI 호환 API (https://api.poe.com/v1/chat/completions) */
-export async function chat(messages: ChatMessage[], { temperature = 0.1, maxTokens = 8000 } = {}): Promise<string> {
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const res = await fetch(`${config.poe.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${config.poe.apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: config.poe.model, messages, temperature, max_tokens: maxTokens, stream: false }),
-        signal: AbortSignal.timeout(180_000),
-      });
-      if (res.status === 429 || res.status >= 500) {
-        lastError = new Error(`Poe API ${res.status}: ${(await res.text()).slice(0, 300)}`);
-        await new Promise((r) => setTimeout(r, 2000 * 2 ** attempt));
-        continue;
-      }
-      if (!res.ok) throw new Error(`Poe API ${res.status}: ${(await res.text()).slice(0, 300)}`);
-      const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-      const content = data.choices?.[0]?.message?.content;
-      if (!content) throw new Error('Poe API 응답에 content 가 없습니다');
-      return content;
-    } catch (err) {
-      lastError = err;
-      if (err instanceof Error && /Poe API 4\d\d/.test(err.message) && !err.message.includes('429')) throw err;
-    }
-  }
-  throw lastError;
+/**
+ * Anthropic Claude Messages API (https://api.anthropic.com/v1/messages).
+ * `system` messages are lifted into the top-level `system` field (Anthropic keeps
+ * them separate from the user/assistant turns). `temperature` is intentionally
+ * not sent — the Messages API rejects it (400) on current models. The SDK retries
+ * 429/5xx/network errors itself (maxRetries), so no manual retry loop here.
+ */
+export async function chat(messages: ChatMessage[], { maxTokens = 8000 } = {}): Promise<string> {
+  const client = new Anthropic({ apiKey: config.claude.apiKey });
+
+  const system = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n\n');
+  const turns: Anthropic.MessageParam[] = messages
+    .filter((m) => m.role !== 'system')
+    .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+
+  const res = await client.messages.create({
+    model: config.claude.model,
+    max_tokens: maxTokens,
+    // Keep thinking shallow: these are extraction/classification calls, and
+    // thinking tokens share the max_tokens budget with the JSON output.
+    output_config: { effort: 'low' },
+    ...(system ? { system } : {}),
+    messages: turns,
+  });
+
+  const content = res.content
+    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+    .map((b) => b.text)
+    .join('');
+  if (!content) throw new Error('Claude 응답에 text 가 없습니다');
+  return content;
 }
 
 /** 코드펜스나 앞뒤 설명이 섞여 있어도 첫 JSON 객체를 꺼낸다 */

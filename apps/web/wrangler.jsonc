@@ -17,9 +17,9 @@
     "producers": [{ "binding": "SCAN_QUEUE", "queue": "argos-scans" }],
     "consumers": [{ "queue": "argos-scans", "max_batch_size": 1, "max_retries": 0 }]
   },
-  // 민감하지 않은 설정. 비밀값(GITHUB_CLIENT_*, POE_API_KEY, SESSION_SECRET, ENCRYPTION_KEY)은 secret 으로 넣는다
+  // 민감하지 않은 설정. 비밀값(GITHUB_CLIENT_*, ANTHROPIC_API_KEY, SESSION_SECRET, ENCRYPTION_KEY)은 secret 으로 넣는다
   "vars": {
-    "POE_MODEL": "claude-sonnet-5.5",
+    "ANTHROPIC_MODEL": "claude-sonnet-5-5",
     "FAIL_ON": "high",
     "MIN_CONFIDENCE": "0.5",
     "REPORT_LANG": "ko"

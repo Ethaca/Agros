@@ -12,7 +12,7 @@ import {
 import { radarPage } from '../src/ui/server.tsx';
 import { judgeVersion, lowestOf, parseRangeExpression } from '../src/versions.ts';
 
-bindEnv({ POE_API_KEY: '', ENCRYPTION_KEY: 'a'.repeat(64), SESSION_SECRET: 'b'.repeat(64), PUBLIC_URL: 'https://sentinel.test' });
+bindEnv({ ANTHROPIC_API_KEY: '', ENCRYPTION_KEY: 'a'.repeat(64), SESSION_SECRET: 'b'.repeat(64), PUBLIC_URL: 'https://sentinel.test' });
 
 test('버전 범위: GHSA 표기, 브랜치별 패치 목록, 범위 표기의 하한', () => {
   assert.deepEqual(parseRangeExpression('>= 16.3.0, < 16.3.4'), { introduced: '16.3.0', fixed: '16.3.4' });

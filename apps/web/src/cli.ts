@@ -5,7 +5,7 @@ import { splitUnifiedDiff } from './diff.ts';
 import { renderSummaryMarkdown, shouldFail } from './reporter.ts';
 
 // 사용법: npm run scan -- <diff 파일 | -> [--json] [--no-llm] [--intent "변경 목적"]
-// POE_API_KEY 등은 환경변수나 .dev.vars 에서 읽는다
+// ANTHROPIC_API_KEY 등은 환경변수나 .dev.vars 에서 읽는다
 for (const f of ['.dev.vars', '.env']) if (existsSync(f)) process.loadEnvFile(f);
 bindEnv(process.env);
 
@@ -21,7 +21,7 @@ if (!path) {
   console.error('사용법: npm run scan -- <diff 파일 | - (stdin)> [--json] [--no-llm] [--intent "변경 목적"]\n예: git diff main | npm run scan -- -');
   process.exit(2);
 }
-if (args.includes('--no-llm')) bindEnv({ POE_API_KEY: '' });
+if (args.includes('--no-llm')) bindEnv({ ANTHROPIC_API_KEY: '' });
 
 const diff = readFileSync(path === '-' ? 0 : path, 'utf8');
 const result = await analyze({ files: splitUnifiedDiff(diff), intent });
