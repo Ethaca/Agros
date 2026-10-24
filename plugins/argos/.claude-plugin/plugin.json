@@ -1,6 +1,6 @@
 {
   "name": "argos",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Guided Argos demo: create a demo repo on your GitHub account, open a PR with planted access-control flaws, let Argos attack it in GitHub Actions, and get a report PR with a verified fix.",
   "author": {
     "name": "Ethaca",

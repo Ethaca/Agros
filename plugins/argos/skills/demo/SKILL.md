@@ -1,59 +1,65 @@
 ---
 name: demo
-description: Guide the user through the Argos GitHub Actions demo one confirmed step at a time — check gh login, create a demo repo on their account, open a PR with planted access-control flaws, wait for Argos in CI, then show the report PR with the verified fix, and clean up. Use when the user asks to try, demo, or experience Argos ("데모", "체험", "argos 데모 해줘", "try argos", "demo").
+description: Hands-on Argos tutorial on the user's own GitHub account — six short steps (login, demo repo, vulnerable PR, Argos in Actions, report, cleanup), one confirmed step at a time. Use when the user asks to try, demo, learn, or experience Argos ("데모", "체험", "튜토리얼", "argos 데모 해줘", "try argos", "demo", "tutorial").
 ---
 
-# Argos GitHub Actions demo
+# Argos 튜토리얼
 
-The user experiences, on their own GitHub account: **demo app → GitHub login → PR → Argos in CI → report PR with a verified fix**. You run every command; the user only confirms. Everything is done by the plugin's script: run it as `bash "${CLAUDE_PLUGIN_ROOT}/demo.sh" <command>` from any directory (below, `demo.sh` means that). Read `${CLAUDE_PLUGIN_ROOT}/README.md` if you need details. The user needs only `git` and `gh`; Node and Docker are not needed locally.
+The user learns Argos by doing: a harmless-looking PR breaks access control, Argos catches it in GitHub Actions and opens a PR with a verified fix. You run every command; the user only confirms.
 
-## Rules
+Script: `bash "${CLAUDE_PLUGIN_ROOT}/demo.sh" <command>` (below: `demo.sh`). Works from any directory. The user needs only `git` and `gh`.
 
-- **One step at a time.** Before every step that changes something on GitHub (create, pr, cleanup), ask with `AskUserQuestion` (options: proceed / skip or stop). Read-only steps (check, watch, report) need no confirmation.
-- **Short messages.** Each step: one line on what happens, run it, two or three lines on what came out. No walls of text. Speak the user's language (default Korean).
-- Show the step header as `[n/6] 단계 이름` so the user sees where they are.
-- Never print tokens. Never run `gh auth login`/`refresh` yourself: they are interactive. Ask the user to type `! <command>` in the prompt.
-- If a command fails, show its last lines, explain the cause in one sentence, give the fix, and retry only after the user confirms.
-- Pass the same `--repo <owner/name>` (and `--lang`) to every command once chosen.
+## How to talk
+
+Every step uses **exactly this card**, nothing more (speak the user's language; default Korean):
+
+```
+**[n/6] 단계 이름**
+🎯 <what this step is for, one line>
+▶ <what you ran / what happened, one or two lines, with the URL if any>
+💡 <the one idea to take away, one line>
+```
+
+Then move on with `AskUserQuestion`: one question, options `다음 단계` / `그만하기` (plus step-specific options below). No other prose, no tables, no recap of earlier steps.
+
+- Steps that change GitHub (2, 3, 6) run only after the user picks `다음 단계` on the previous card.
+- On failure: one line of cause + the fix command. Login commands are interactive: ask the user to type `! <command>`, never run them yourself.
+- Never invent numbers; take them from command output. Never print tokens.
+- Reuse the same `--repo <owner/name>` and `--lang` for every command.
+
+## Start
+
+Card-free intro, max 3 lines: "6단계, 약 5분. 내 GitHub 계정에 비공개 레포 1개를 만들고 마지막에 지울 수 있어요." Then ask `시작` / `그만하기`.
 
 ## Steps
 
-### Opening
-In 3–4 lines: what they will see (a harmless-looking PR breaks access control; Argos attacks the app in Docker inside GitHub Actions and opens a PR with the report and a re-verified fix), that it takes about 5 minutes, and that it creates **one repository on their account** (private by default; deletable at the end). Then the six steps as a short list:
-1. 준비 확인 (GitHub 로그인)  2. 데모 앱 받기  3. PR 올리기  4. Argos 실행 대기  5. 리포트 받기  6. 정리
+**[1/6] GitHub 로그인** — run `demo.sh check`.
+- 🎯 Argos는 내 GitHub 레포에서 돈다. `gh`로 로그인됐는지 확인.
+- 💡 필요한 건 `git`과 `gh`뿐. 로컬에 Node·Docker는 필요 없다.
+- Fixes: no gh → `brew install gh`; not logged in → `! gh auth login -h github.com -s workflow`; missing scope → `! gh auth refresh -h github.com -s workflow`. Re-run check after.
 
-### [1/6] 준비 확인 — GitHub 로그인
-Run `demo.sh check`.
-- `GitHub CLI is required` → tell them `brew install gh` (or https://cli.github.com), then re-run.
-- `not logged in` → ask them to type `! gh auth login -h github.com -s workflow` and finish the browser login, then re-run.
-- `lacks the 'workflow' scope` → `! gh auth refresh -h github.com -s workflow`, then re-run.
-- Note the login it prints; the default repo is `<login>/argos-demo`. If check says it already exists, offer a different name.
+**[2/6] 데모 앱 받기** — first one `AskUserQuestion` with three questions: 레포 이름 (`argos-demo` Recommended), 공개 범위 (비공개 Recommended / 공개), 리포트 언어 (한국어 Recommended / English). If check said the name exists, recommend `argos-demo-<MMDD>`. Then `demo.sh create --repo <owner/name> --lang <ko|en> [--public]`.
+- 🎯 벤더마다 자기 데이터만 보는 API를 내 계정에 올린다.
+- 💡 `argos.config.yaml` = "누가 무엇을 볼 수 있나" 규칙. Argos는 이 규칙대로 공격한다.
 
-### [2/6] 데모 앱 받기
-Ask in one `AskUserQuestion` call (three questions):
-- 레포 이름: `argos-demo` (Recommended) / `argos-demo-<today's MMDD>` (user can type another via Other)
-- 공개 범위: 비공개 (Recommended) / 공개 — private uses their Actions minutes; public shows the planted flaws publicly
-- 리포트 언어: 한국어 (Recommended) / English
+**[3/6] 취약한 PR 올리기** — show the two changed lines of `${CLAUDE_PLUGIN_ROOT}/vulnerable.patch` (just the `-`/`+` lines), then `demo.sh pr --repo <owner/name> --lang <ko|en>`.
+- 🎯 정리처럼 보이는 PR이 실은 보안 구멍 두 개를 연다.
+- 💡 ① vendor 조건 삭제 → 남의 데이터 조회 ② `SELECT *` → API 키 노출. 코드 리뷰로는 놓치기 쉽다.
 
-Then confirm and run `demo.sh create --repo <owner/name> --lang <ko|en> [--public]`.
-Afterwards explain briefly what the repo contains: `app.mjs` (multi-tenant API: each vendor sees only its own data), `argos.config.yaml` (the rules a person confirmed: who may read what), `.github/workflows/argos.yml` (Argos runs on every PR). Give the repo URL.
+**[4/6] Argos 실행 지켜보기** — `demo.sh watch --repo <owner/name>` with `run_in_background: true`. Show the card right away with the Actions URL, then wait for the completion notification (do not poll). On failure: `gh run view <id> --repo <owner/name> --log-failed | tail -30`.
+- 🎯 Actions에서 Argos가 앱을 띄워 실제로 공격한다 (1~3분).
+- 💡 앱은 네트워크·쓰기 토큰 없는 Docker 안에서 돈다. PR을 쓰는 단계는 따로 분리돼 있다.
 
-### [3/6] PR 올리기
-Show `${CLAUDE_PLUGIN_ROOT}/vulnerable.patch` as a compact diff and explain: it looks like a harmless cleanup, but (1) dropping the vendor filter lets any vendor read other vendors' datasets (BOLA), (2) `SELECT *` leaks the API key in the vendor profile. Ask whether to open it, then run `demo.sh pr --repo <owner/name> --lang <ko|en>` and give the PR URL.
+**[5/6] 리포트 받기** — `demo.sh report --repo <owner/name> --save ./argos-demo-report.md`, then `gh pr diff <report PR url>`.
+- 🎯 무엇이 뚫렸고, 무엇을 고쳤고, 고친 게 통하는지.
+- ▶ 🔴 before → after, the fixed lines (one line each), report PR URL.
+- 💡 수정은 같은 공격을 다시 해서 막힌 것만 PR에 들어간다.
+- Extra option: `브라우저로 열기` → `gh pr view <url> --web`.
 
-### [4/6] Argos 실행 대기
-Run `demo.sh watch --repo <owner/name>` with `run_in_background: true` (1–3 minutes). Tell the user the Actions URL it prints and what is happening: the `prepare` job runs the app in Docker with no network and no write token, attacks every route as each vendor and anonymously, and re-verifies a fix; the `publish` job opens the report PR. Wait for the completion notification; do not poll.
-If it fails, run `gh run view <id> --repo <owner/name> --log-failed | tail -40` and explain.
+**[6/6] 정리** — options `레포 삭제` / `남겨두기`. Delete: `demo.sh cleanup --repo <owner/name>`; if `delete_repo` scope is missing → `! gh auth refresh -h github.com -s delete_repo`, then retry.
+- 🎯 실습 레포를 지운다.
+- 💡 내 레포에 쓰려면 `.github/workflows/argos.yml`과 `argos.config.yaml`을 복사하면 된다.
 
-### [5/6] 리포트 받기
-Run `demo.sh report --repo <owner/name> --save ./argos-demo-report.md` and `gh pr diff <report PR url>`.
-Summarize in plain words (no jargon), from the actual output only — never invent numbers:
-- 무엇이 문제였나: the 🔴 counts and what they mean (e.g. "vendor1이 vendor2의 데이터셋을 읽을 수 있었다", "벤더 프로필에 API 키가 노출됐다").
-- 무엇을 고쳤나: the lines changed in the report PR's diff.
-- 어떻게 확인했나: the same attacks were re-run on the fix (🔴 before → after).
-- 사람이 할 일: review and merge the report PR into the feature branch.
-Give the report PR URL and the saved file path. Offer `gh pr view <url> --web` to open it in the browser.
+## End
 
-### [6/6] 정리
-Ask: delete the demo repository / keep it. If delete: `demo.sh cleanup --repo <owner/name>`. If it says the `delete_repo` scope is missing, ask them to type `! gh auth refresh -h github.com -s delete_repo` and retry, or delete it from the repo's Settings page.
-End with one line: what they saw, and where to read more (https://github.com/Ethaca/Agros, `prd/11-ci-flow.md` there).
+One line: "완료: PR 하나로 Argos가 취약점을 찾고, 검증된 수정을 PR로 받았어요." Plus the saved report path. Nothing else.
