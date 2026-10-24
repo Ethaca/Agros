@@ -242,7 +242,7 @@ argos report [--scan out/] [--format md] [--out out/report.md]
 ## 9. 기술 스택과 디렉터리
 
 - **TypeScript(ESM) + Node 25 + pnpm**, 실행은 `tsx`. 검증은 **Zod**, CLI는 가벼운 라이브러리(`commander` 등), HTTP 클라이언트는 내장 `fetch`.
-- 새 디렉터리: `hackathon/1024/argos/` (기존 `hackathon/argos/`와 분리).
+- 새 코드 위치: 이 저장소 루트(`Agros/`). 기존 `hackathon/argos/`와 분리.
 
 ```
 argos/
@@ -315,7 +315,7 @@ argos/
 | 이 영역에 이미 경쟁 제품이 있다 | 차별점(공격 증명 + 증빙 문서 + 쉬운 세팅)은 미검증 가설로 둔다 |
 
 **열린 질문**
-1. 새 코드 위치를 `hackathon/1024/argos/`로 해도 되는가(기존 `hackathon/argos/`는 그대로 둠)?
+1. ~~새 코드 위치~~ → 확정: 이 저장소 루트(`Agros/`). 기존 `hackathon/argos/`는 그대로 둠.
 2. 격리 없이 프로세스로 실행하는 v1을 받아들이는가(데모는 자체 앱만)?
 3. 블랙박스 + 설정 기반(경로 자동 추적 포기)으로 가는 것에 동의하는가?
 4. PR 연동은 v1에서 Actions 예시까지만으로 충분한가?

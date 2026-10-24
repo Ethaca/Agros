@@ -506,11 +506,11 @@ argos report --scan out/findings.json [--matrix out/matrix.json] --out out/repor
 **시연 스크립트 (제안)**
 
 ```
-argos init  ../demo/vendor-platform                      # AI draft config, prints T1 / K
-argos scan  ../demo/vendor-platform --checks bac,unauth,sqli,secrets --matrix --out out/
+argos init  demo/vendor-platform                      # AI draft config, prints T1 / K
+argos scan  demo/vendor-platform --checks bac,unauth,sqli,secrets --matrix --out out/
 #   -> matrix: mismatched cells in red; secrets: api_key exposed to vendor2, env secret via /debug
-argos fix   ../demo/vendor-platform --checks bac,secrets --apply
-argos scan  ../demo/vendor-platform --checks bac,unauth,sqli,secrets --matrix --out out/after/
+argos fix   demo/vendor-platform --checks bac,secrets --apply
+argos scan  demo/vendor-platform --checks bac,unauth,sqli,secrets --matrix --out out/after/
 argos report --scan out/after/findings.json --matrix out/after/matrix.json --out out/report.md
 ```
 

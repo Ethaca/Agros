@@ -4,15 +4,20 @@
   "private": true,
   "type": "module",
   "description": "Argos: prove, vouch, and plug access-control checks",
-  "bin": { "argos": "./src/cli.ts" },
+  "bin": {
+    "argos": "./src/cli.ts"
+  },
   "scripts": {
     "argos": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test test/*.test.ts"
   },
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "dependencies": {
     "commander": "^14.0.0",
+    "yaml": "^2.9.1",
     "zod": "^4.0.0"
   },
   "devDependencies": {
