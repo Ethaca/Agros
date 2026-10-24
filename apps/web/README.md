@@ -98,6 +98,8 @@ Worker 가 `renderToString` 으로 HTML 을 그려 보내고, 브라우저는 �
 
 ### 로컬 개발
 
+GitHub 로그인과 PR Webhook을 연결하는 로컬 데모 설정은 [DEMO.md](DEMO.md)를 따른다.
+
 ```bash
 npm install
 cp .dev.vars.example .dev.vars   # 값 채우기
