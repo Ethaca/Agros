@@ -86,6 +86,12 @@ export const Config = z
         principal: z.string().min(1).optional(),
       })
       .optional(),
+    /**
+     * Who vouches for a field: a person ("confirmed") or the drafting AI/heuristics ("ai-draft"). Keys look like
+     * `resources.<id>.expect`. Unconfirmed expectations are listed in scan-meta.json and in the report, and
+     * `argos init --update` never changes a confirmed field.
+     */
+    provenance: z.record(z.string(), z.enum(["confirmed", "ai-draft"])).optional(),
     mode: z.enum(["report", "block"]).default("report"),
     llm: z
       .strictObject({

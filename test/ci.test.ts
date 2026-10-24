@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { cpSync, existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { runCi } from "../src/ci.js";
+import { inCi, runCi } from "../src/ci.js";
 import { gitLab } from "./helpers/git-lab.js";
 
 const FX = resolve("test/fixtures/vuln-app");
@@ -91,4 +91,61 @@ test("--pr with nothing to fix opens no PR and does not touch git", async () => 
   } finally {
     process.env.PATH = saved;
   }
+});
+
+async function withEnv<T>(env: Record<string, string | undefined>, fn: () => Promise<T>): Promise<T> {
+  const saved = { ...process.env };
+  for (const [k, v] of Object.entries(env)) {
+    if (v === undefined) delete process.env[k];
+    else process.env[k] = v;
+  }
+  try {
+    return await fn();
+  } finally {
+    for (const k of Object.keys(env)) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  }
+}
+
+test("inCi: CI=true turns the automatic PR on; false/0/empty keep it off", () => {
+  assert.equal(inCi({ CI: "true" }), true);
+  assert.equal(inCi({ CI: "1" }), true);
+  assert.equal(inCi({ CI: "false" }), false);
+  assert.equal(inCi({ CI: "0" }), false);
+  assert.equal(inCi({ CI: "" }), false);
+  assert.equal(inCi({}), false);
+});
+
+test("in CI a verified fix opens a PR on a NEW branch with no flag, targeting the user's branch", async () => {
+  const lab = gitLab(FX);
+  const r = await withEnv({ CI: "true", PATH: lab.path, GITHUB_HEAD_REF: "feature/login", GITHUB_BASE_REF: "main" }, () => runCi(base(join(lab.work, "argos.config.yaml"))));
+  assert.ok(r.pr, "automatic in CI");
+  assert.match(r.pr!.branch, /^argos\/fix-/);
+  assert.equal(r.pr!.base, "feature/login", "stacked on the user's PR, not on its destination");
+  assert.notEqual(r.pr!.branch, "main");
+  assert.match(lab.ghCalls()[0]!, /--base feature\/login --head argos\/fix-/);
+  assert.equal(lab.git("rev-parse", "--abbrev-ref", "HEAD"), "main", "the checked-out branch is not modified");
+});
+
+test("--no-pr wins over CI; outside CI the default is no PR", async () => {
+  const off = gitLab(FX);
+  const a = await withEnv({ CI: "true", PATH: off.path }, () => runCi(base(join(off.work, "argos.config.yaml"), { pr: false })));
+  assert.equal(a.pr, null);
+  assert.equal(off.ghCalls().length, 0);
+  assert.equal(off.git("branch", "--list", "argos/*"), "");
+
+  const local = gitLab(FX);
+  const b = await withEnv({ CI: undefined, PATH: local.path }, () => runCi(base(join(local.work, "argos.config.yaml"))));
+  assert.equal(b.pr, null);
+  assert.equal(local.ghCalls().length, 0);
+});
+
+test("on an argos fix branch no PR is opened, so fix PRs cannot loop", async () => {
+  const lab = gitLab(FX);
+  lab.git("checkout", "-q", "-b", "argos/fix-abc123-loop");
+  const r = await withEnv({ CI: "true", PATH: lab.path }, () => runCi(base(join(lab.work, "argos.config.yaml"))));
+  assert.equal(r.pr, null);
+  assert.equal(lab.ghCalls().length, 0);
 });

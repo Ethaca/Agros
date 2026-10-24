@@ -120,6 +120,7 @@ export async function runScan(opts: ScanOptions): Promise<ScanResult> {
         ? { schema: { file: cfg.seed.schema, sha256: hashConfigText(readFileSync(schemaPath, "utf8")) }, rows: null }
         : null,
       checks: cfg.checks,
+      unconfirmed: Object.entries(cfg.provenance ?? {}).filter(([, v]) => v === "ai-draft").map(([k]) => k).sort(),
       personas: cfg.personas.map((p) => ({ name: p.name, org: p.org ?? null })),
       resources: cfg.resources.map((r) => ({ id: r.id, route: r.route, public: !!r.public })),
       results: { cells: matrix.cells.length, findings: findings.length, counts },

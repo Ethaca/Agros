@@ -5,7 +5,7 @@
  Customer / CI
       │  argos init · scan · fix · report
       ▼
- ① CLI & Setup        scan ✅  fix ✅  report ✅  ci ✅  init ⬜(A)   src/cli.ts (B 소유)
+ ① CLI & Setup        scan ✅  fix ✅  report ✅  ci ✅  init ✅v1   src/cli.ts (B 소유)
  ② PROVE core         config → seed → runner → matrix → scan        ✅
  ③ Checks             bola ✅ unauth ✅ sqli ✅ secrets (a)(b)(c) ✅
  ④ Execution          process ✅ · container ✅ (네트워크 없음·읽기 전용·비root)
@@ -39,6 +39,7 @@ loadConfig ─► 임시 복사본 만들기 ─► DB 시드(마커) ─► 앱
 | `checks/*` | 점검 4종 + 정적 스캔 |
 | `fix/*` | 제안 생성, 제안별 누적 재검증 |
 | `scan.ts` | 전체 파이프라인, 출력 파일, 종료 코드 |
+| `init/` | `argos init`: `facts.ts`(정적 사실 수집) → `draft.ts`(초안 규칙) → `emit.ts`(주석 달린 YAML) → `verify.ts`(기동·로그인 검증) → `index.ts` |
 | `report.ts` | 증빙 리포트·PR 요약. 해시를 다시 계산해 파일이 바뀌었으면 거부 |
 | `ci.ts` | `argos ci`: scan + fix 검증 + 리포트 + (선택) 적용/PR |
 | `pr.ts` | 수정 브랜치·커밋·push·`gh pr create`. 더러운 작업 트리 거부, 끝나면 원래 브랜치로 복귀 |

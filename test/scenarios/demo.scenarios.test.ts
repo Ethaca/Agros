@@ -9,7 +9,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { createHash } from "node:crypto";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, rmSync, writeFileSync } from "node:fs";
 import { gitLab } from "../helpers/git-lab.js";
 import { join } from "node:path";
 import {
@@ -316,6 +316,19 @@ describe("demo scenarios", { skip }, () => {
       assert.equal(lab.ghCalls().length, 1);
     });
 
+    it("in CI (CI=true) no flag is needed: the verified fixes become a PR on a new branch", () => {
+      const lab = gitLab(join(ROOT, "demo", "vendor-platform"));
+      const r = cli(["ci", "--config", join(lab.work, "argos.config.yaml"), "--out", join(lab.root, "o")], { PATH: lab.path, CI: "true" });
+      assert.equal(r.status, 0, r.stderr);
+      assert.match(r.stdout, /\(PR on: CI environment\)/);
+      assert.match(r.stdout, /opened https:\/\/github\.com\/acme\/app\/pull\/42 \(branch argos\/fix-/);
+      assert.equal(lab.git("rev-parse", "--abbrev-ref", "HEAD"), "main");
+      const noPr = cli(["ci", "--config", join(lab.work, "argos.config.yaml"), "--out", join(lab.root, "o2"), "--no-pr"], { PATH: lab.path, CI: "true" });
+      assert.equal(noPr.status, 0, noPr.stderr);
+      assert.ok(!/opened https/.test(noPr.stdout));
+      assert.equal(lab.ghCalls().length, 1, "--no-pr opened nothing more");
+    });
+
     it("exit code follows the scanned code: block mode + red = 2, report mode = 0", () => {
       const dir = copyApp("vendor-platform");
       const block = variantConfig(dir, "block.yaml", (t) => t.replace(/^mode: report$/m, "mode: block"));
@@ -349,6 +362,87 @@ describe("demo scenarios", { skip }, () => {
       const r = cli(["ci", "--config", join(dir, "argos.config.yaml"), "--out", out, "--isolation", "container"]);
       assert.equal(r.status, 0, r.stderr);
       assert.match(readFileSync(join(out, "report.md"), "utf8"), /container \(`node:\d+-slim`: 네트워크 없음, 읽기 전용 루트, 비root\)/);
+    });
+  });
+
+  describe("S15 `argos init`: from a repo with no config to a verified, usable config", () => {
+    const bare = (app: (typeof APPS)[number]): string => {
+      const dir = copyApp(app);
+      rmSync(join(dir, "argos.config.yaml"));
+      return dir;
+    };
+    // the hand-written configs name resources differently from the drafted ones
+    const MAP: Record<string, string> = { "dataset-read": "get-datasets-id", "dataset-search": "get-datasets", export: "post-export", "vendor-profile": "get-vendors-id", "debug-env": "get-debug-env" };
+    const reds = (fs: { check: string; resourceId: string; verdict: string }[], rename = (x: string) => x): Record<string, number> => {
+      const m: Record<string, number> = {};
+      for (const f of fs.filter((x) => x.verdict === "VULNERABLE")) {
+        const k = `${f.check} ${rename(f.resourceId)}`;
+        m[k] = (m[k] ?? 0) + 1;
+      }
+      return m;
+    };
+
+    it("vendor-platform: init finds the same vulnerabilities as the hand-written config, plus the one rule only a person can know", () => {
+      const dir = bare("vendor-platform");
+      const i = cli(["init", dir, "--isolation", "process", "--report", join(dir, "o")]);
+      assert.equal(i.status, 0, i.stderr);
+      assert.match(i.stdout, /verified: app starts, 3 personas can read their own data/);
+      assert.match(i.stdout, /routes: 10 found, 10 put into the config, 0 not tested/);
+
+      const drafted = scan(join(dir, "argos.config.yaml"));
+      const hand = pristineScan("vendor-platform");
+      const inverse = Object.fromEntries(Object.entries(MAP).map(([a, b]) => [b, a]));
+      const want = reds(hand.findings);
+      const got = reds(drafted.findings, (x) => inverse[x] ?? x);
+      // conservative default: "other orgs may not read a vendor profile" is not what this app intends
+      assert.equal(got["bola vendor-profile"], 6);
+      delete got["bola vendor-profile"];
+      assert.deepEqual(got, want, "everything else matches the hand-written config exactly");
+      assert.ok(drafted.meta.unconfirmed.length > 0);
+    });
+
+    it("a person confirms the one business rule and the false alarm is gone (realistic-app: 0 red)", () => {
+      const dir = bare("realistic-app");
+      assert.equal(cli(["init", dir, "--isolation", "process", "--report", join(dir, "o")]).status, 0);
+      const cfg = join(dir, "argos.config.yaml");
+      const first = scan(cfg);
+      assert.deepEqual(reds(first.findings), { "bola get-vendors-id": 6 }, "the only alarm is the profile rule");
+
+      writeFileSync(cfg, readFileSync(cfg, "utf8").replace(/(id: get-vendors-id[\s\S]*?other: )deny/, "$1allow").replace("resources.get-vendors-id.expect: ai-draft", "resources.get-vendors-id.expect: confirmed"));
+      const second = scan(cfg);
+      assert.equal(second.counts.VULNERABLE, 0);
+      assert.ok(!second.meta.unconfirmed.includes("resources.get-vendors-id.expect"));
+      assert.ok(second.meta.unconfirmed.length > 0, "the rest is still unconfirmed and says so");
+    });
+
+    it("the generated config works with ci: report with the unconfirmed-rules warning, verified fix PR body", () => {
+      const dir = bare("vendor-platform");
+      assert.equal(cli(["init", dir, "--isolation", "process", "--report", join(dir, "o")]).status, 0);
+      const out = join(dir, "ci-out");
+      const r = cli(["ci", "--config", join(dir, "argos.config.yaml"), "--out", out]);
+      assert.equal(r.status, 0, r.stderr);
+      const md = readFileSync(join(out, "report.md"), "utf8");
+      assert.match(md, /미확인 기대 규칙 \d+개/);
+      assert.match(md, /✅ 채택: limit columns/);
+      assert.match(md, /✅ 채택: scope GET \/api\/datasets\/:id/);
+    });
+
+    it("default isolation is the container: the draft is verified inside the sandbox", { skip: hasDocker() ? false : "docker not available" }, () => {
+      const dir = bare("vendor-platform");
+      const i = cli(["init", dir, "--report", join(dir, "o")]);
+      assert.equal(i.status, 0, i.stderr);
+      assert.match(readFileSync(join(dir, "argos.config.yaml"), "utf8"), /isolation: container/);
+      assert.match(i.stdout, /verified: app starts, 3 personas/);
+    });
+
+    it("init-report lists what a person must confirm and what was not tested", () => {
+      const dir = bare("vendor-platform");
+      cli(["init", dir, "--isolation", "process", "--report", join(dir, "o")]);
+      const md = readFileSync(join(dir, "o", "init-report.md"), "utf8");
+      assert.match(md, /사람이 확인할 것 \(\d+\)/);
+      assert.match(md, /no auth middleware found on routes that read tenant data: POST \/api\/export/);
+      assert.match(md, /internal-looking routes are expected to be denied to everyone: GET \/debug\/env/);
+      assert.match(md, /LLM 사용 \| 아니오/);
     });
   });
 

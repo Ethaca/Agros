@@ -14,6 +14,9 @@
 | [08-testing.md](08-testing.md) | 테스트 전략, 시나리오, 실행 방법, 수치 |
 | [09-decisions.md](09-decisions.md) | 결정 기록(왜 그렇게 했나) |
 | [10-status-and-roadmap.md](10-status-and-roadmap.md) | 구현 현황, 남은 일, 위험·열린 질문 |
+| [12-init.md](12-init.md) | `argos init` 설계: 단계, 탐지 규칙, 기대 규칙을 코드에서 추정하지 않는 이유, 시험 환경 구성, 검증, 전송 정책, `--update`/`--check`, 구현 상태 |
 | [11-ci-flow.md](11-ci-flow.md) | CI 목표 흐름(정적→LLM 설정→동적→수정→PR→보고서), 현재 구현, 순환 논리 위험, 비개발자용 PR 메시지 |
 
 관련 문서: 명세 `docs/SPEC.md`(구현 기준), 역할 `docs/ROLE.md`, 진행 현황 `docs/develop/status/sun.md`, 출력 예시 `examples/out/`.
+
+설치형 제품의 진입점과 구현 순서는 [GitHub App 구현 계획](../docs/GITHUB_APP_PLAN.md)을 따른다. 고객은 App 설치와 저장소 선택만 수행하고, Argos 서비스가 자동 설정·격리 검사·별도 결과 PR 생성을 담당한다.

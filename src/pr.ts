@@ -11,6 +11,30 @@ import { join } from "node:path";
 
 export class PrError extends Error {}
 
+export const FIX_BRANCH_PREFIX = "argos/fix";
+
+/**
+ * Branch the fix PR should target in GitHub Actions: the user's change, so merging the fix updates it.
+ *   pull_request event: the PR's source branch (GITHUB_HEAD_REF), NOT its destination (GITHUB_BASE_REF)
+ *   push event:         the pushed branch (GITHUB_REF_NAME; on pull_request events that is "<n>/merge", not a branch)
+ */
+export function ciBase(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  if (env.GITHUB_HEAD_REF) return env.GITHUB_HEAD_REF;
+  if (env.GITHUB_REF_TYPE === "branch" && env.GITHUB_REF_NAME) return env.GITHUB_REF_NAME;
+  return env.GITHUB_BASE_REF || undefined;
+}
+
+/** True when the code being checked is itself an argos fix branch: do not open a fix PR for a fix PR. */
+export function onFixBranch(dir: string, env: NodeJS.ProcessEnv = process.env): boolean {
+  const names = [env.GITHUB_HEAD_REF, env.GITHUB_REF_TYPE === "branch" ? env.GITHUB_REF_NAME : undefined];
+  try {
+    names.push(execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim());
+  } catch {
+    /* not a git repo: nothing to add */
+  }
+  return names.some((n) => !!n && n.startsWith(`${FIX_BRANCH_PREFIX}-`));
+}
+
 export interface PrOptions {
   /** Any directory inside the git repository. */
   dir: string;
@@ -18,7 +42,7 @@ export interface PrOptions {
   apply: () => string[];
   title: string;
   body: string;
-  /** Branch the PR targets. Default: $GITHUB_BASE_REF, else the branch that is checked out. */
+  /** Branch the PR targets. Default: see ciBase() in GitHub Actions, else the branch that is checked out. */
   base?: string;
   remote?: string;
   branchPrefix?: string;
@@ -64,11 +88,11 @@ export function openFixPr(o: PrOptions): PrResult {
   }
   const head = run("git", ["rev-parse", "--abbrev-ref", "HEAD"], root);
   const original = head === "HEAD" ? run("git", ["rev-parse", "HEAD"], root) : head;
-  const base = o.base ?? (process.env.GITHUB_BASE_REF || undefined) ?? (head !== "HEAD" ? head : undefined);
+  const base = o.base ?? ciBase() ?? (head !== "HEAD" ? head : undefined);
   if (!base) throw new PrError("cannot tell which branch the PR should target (detached HEAD): pass --base <branch>");
   if (!tryGit(root, ["remote", "get-url", remote])) throw new PrError(`git remote "${remote}" is not configured`);
 
-  const branch = `${o.branchPrefix ?? "argos/fix"}-${run("git", ["rev-parse", "--short", "HEAD"], root)}-${Date.now().toString(36)}`;
+  const branch = `${o.branchPrefix ?? FIX_BRANCH_PREFIX}-${run("git", ["rev-parse", "--short", "HEAD"], root)}-${Date.now().toString(36)}`;
   const identity: NodeJS.ProcessEnv = { ...process.env };
   if (!tryGit(root, ["config", "user.name"])) Object.assign(identity, { GIT_AUTHOR_NAME: "argos", GIT_COMMITTER_NAME: "argos" });
   if (!tryGit(root, ["config", "user.email"])) Object.assign(identity, { GIT_AUTHOR_EMAIL: "argos@users.noreply.github.com", GIT_COMMITTER_EMAIL: "argos@users.noreply.github.com" });

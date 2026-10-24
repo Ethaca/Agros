@@ -1,5 +1,7 @@
 # Argos Sandbox Plan
 
+Spring 자동 세팅의 첫 지원 범위와 구현 순서는 [SPRING_SUPPORT_PLAN.md](SPRING_SUPPORT_PLAN.md)에 정의한다.
+
 ## 목적
 
 `argos scan`이 고객사 애플리케이션을 실행할 때 고객의 원본 코드·비밀값·호스트 환경을 보호한다. 현재의 임시 복사본 실행은 원본 수정을 막을 뿐 보안 Sandbox가 아니다. 고객사 코드를 대상으로 하는 scan은 격리 Sandbox 안에서만 실행하는 것을 목표로 한다.
