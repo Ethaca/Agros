@@ -17,6 +17,8 @@ export interface SeedManifest {
   /** resourceId -> org -> owner-data marker (full value; mask before printing). */
   markers: Record<string, Record<string, string>>;
   secrets: SecretMarker[];
+  /** resourceId -> org -> id of the seeded row (primary key), for filling `:id` in routes. */
+  ids: Record<string, Record<string, string | number>>;
 }
 
 export class SeedError extends Error {}
@@ -100,7 +102,7 @@ export function seedDatabase(cfg: Config, opts: SeedOptions): SeedManifest {
   for (const suffix of ["", "-wal", "-shm", "-journal"]) rmSync(dbPath + suffix, { force: true });
 
   const orgs = [...new Set(cfg.personas.map((p) => p.org).filter((o): o is string => !!o))];
-  const manifest: SeedManifest = { markers: {}, secrets: [] };
+  const manifest: SeedManifest = { markers: {}, secrets: [], ids: {} };
 
   const db = new DatabaseSync(dbPath);
   try {
@@ -143,10 +145,18 @@ export function seedDatabase(cfg: Config, opts: SeedOptions): SeedManifest {
           } else if (/INT|REAL|FLOA|DOUB|NUM|DEC|BOOL/i.test(c.type)) values.push(1);
           else values.push(ownerMarker(opts.seedKey, resourceIds[0]!, org));
         }
-        db.prepare(
-          `INSERT INTO ${q(table)} (${insertCols.map((c) => q(c.name)).join(", ")}) VALUES (${insertCols.map(() => "?").join(", ")})`,
-        ).run(...values);
-        for (const id of resourceIds) (manifest.markers[id] ??= {})[org] = ownerMarker(opts.seedKey, resourceIds[0]!, org);
+        const res = db
+          .prepare(
+            `INSERT INTO ${q(table)} (${insertCols.map((c) => q(c.name)).join(", ")}) VALUES (${insertCols.map(() => "?").join(", ")})`,
+          )
+          .run(...values);
+        const pk = cols.find((c) => c.pk === 1);
+        const pkIdx = pk ? insertCols.findIndex((c) => c.name === pk.name) : -1;
+        const rowId = pkIdx >= 0 ? values[pkIdx]! : Number(res.lastInsertRowid);
+        for (const id of resourceIds) {
+          (manifest.markers[id] ??= {})[org] = ownerMarker(opts.seedKey, resourceIds[0]!, org);
+          (manifest.ids[id] ??= {})[org] = rowId;
+        }
       }
     }
   } catch (e) {

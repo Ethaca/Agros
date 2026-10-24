@@ -27,6 +27,8 @@ export type Evidence = z.infer<typeof Evidence>;
 export const MatrixCell = z.strictObject({
   persona: z.string(),
   resource: z.string(),
+  /** Org whose data was requested (the persona's own org, or a foreign one). Absent for resources without rows. */
+  target: z.string().optional(),
   expected: Access,
   observed: Observed,
   verdict: Verdict,
