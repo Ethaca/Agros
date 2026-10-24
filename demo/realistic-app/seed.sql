@@ -10,14 +10,18 @@ INSERT INTO datasets (id, vendor_id, name, description) VALUES
   (1, 'v1', 'Clinical QA eval',      'V1-CONFIDENTIAL held-out clinical questions'),
   (2, 'v2', 'Contract clause set',   'V2-CONFIDENTIAL legal clause labels'),
   (3, 'v3', 'Code review pairs',     'V3-CONFIDENTIAL reviewer preference pairs'),
-  (4, 'v1', 'Radiology captions',    'V1-CONFIDENTIAL caption drafts');
+  (4, 'v1', 'Radiology captions',    'V1-CONFIDENTIAL caption drafts'),
+  (5, 'v1', 'Clinical QA eval',      'V1-CONFIDENTIAL duplicate-name regression set'),
+  (6, 'v2', 'Archive import',        'V2-CONFIDENTIAL historical import awaiting review');
 
 INSERT INTO tasks (id, dataset_id, vendor_id, title, instructions, status) VALUES
   (1, 1, 'v1', 'Label batch 1', 'V1-CONFIDENTIAL rubric A', 'open'),
   (2, 1, 'v1', 'Label batch 2', 'V1-CONFIDENTIAL rubric A', 'done'),
   (3, 2, 'v2', 'Clause pass 1', 'V2-CONFIDENTIAL rubric B', 'open'),
   (4, 3, 'v3', 'Pairwise pass', 'V3-CONFIDENTIAL rubric C', 'open'),
-  (5, 4, 'v1', 'Caption review','V1-CONFIDENTIAL rubric D', 'open');
+  (5, 4, 'v1', 'Caption review','V1-CONFIDENTIAL rubric D', 'open'),
+  (6, 5, 'v1', 'Duplicate-name review', 'V1-CONFIDENTIAL rubric E', 'done'),
+  (7, 6, 'v2', 'Archive triage', 'V2-CONFIDENTIAL rubric F', 'blocked');
 
 INSERT INTO products (id, name, summary) VALUES
   (1, 'Labeling', 'Human annotation for AI datasets'),

@@ -1,4 +1,4 @@
-// Argos false-positive baseline: same routes and data as ../vendor-platform, with every flaw fixed.
+// Realistic multi-tenant demo: same domain flow as vendor-platform, with access controls enabled.
 // Argos should report no VULNERABLE cells here.
 import express from "express";
 import { DatabaseSync } from "node:sqlite";
@@ -87,4 +87,4 @@ app.use((err, req, res, next) => {
 });
 
 const port = Number(process.env.PORT ?? 3000);
-app.listen(port, "127.0.0.1", () => console.log(`clean listening on http://127.0.0.1:${port}`));
+app.listen(port, "127.0.0.1", () => console.log(`realistic-app listening on http://127.0.0.1:${port}`));
