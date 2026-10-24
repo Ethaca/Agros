@@ -1,5 +1,7 @@
 # Argos Sandbox Plan
 
+> 2026-10-24: OAuth 웹앱 → 노트북 Docker Worker 연결이 추가됐다. 현재 구현·실행 명령·적용 제한은 [LOCAL_SANDBOX.md](LOCAL_SANDBOX.md)를 따른다. 아래의 기존 Runner 설명과 전체 목표는 별도이며, 서비스 경로는 SQL 준비도 Docker에서 수행한다.
+
 Spring 자동 세팅의 첫 지원 범위와 구현 순서는 [SPRING_SUPPORT_PLAN.md](SPRING_SUPPORT_PLAN.md)에 정의한다.
 
 ## 목적

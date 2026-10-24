@@ -2,6 +2,8 @@
 
 상태: 구현 전 계획. 고객 진입점은 GitHub App 설치와 검사할 저장소 선택이다. 고객에게 CLI 실행, Argos 설정 작성, GitHub Actions workflow 추가를 요구하지 않는다.
 
+현재 부분 구현: 기존 OAuth 웹앱에서 허용된 PR을 노트북 Docker Worker로 보내 실제 검사·별도 댓글·상태를 만드는 연결은 [LOCAL_SANDBOX.md](LOCAL_SANDBOX.md)에 구현했다. GitHub App 설치 인증·설치 직후 검사·별도 결과 PR·Spring 지원까지 완료됐다는 의미는 아니다.
+
 ## 1. 고객에게 보이는 흐름
 
 1. 고객이 Argos GitHub App을 설치하고 저장소를 선택한다.

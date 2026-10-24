@@ -44,6 +44,13 @@ const SCHEMA = [
     finished_at TEXT
   )`,
   `CREATE INDEX IF NOT EXISTS scans_user ON scans(user_id, id DESC)`,
+  `CREATE TABLE IF NOT EXISTS sandbox_jobs (
+    id INTEGER PRIMARY KEY, scan_id INTEGER NOT NULL UNIQUE REFERENCES scans(id),
+    user_id INTEGER NOT NULL REFERENCES users(id), repo TEXT NOT NULL, pr INTEGER NOT NULL, sha TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued', attempts INTEGER NOT NULL DEFAULT 0,
+    lease TEXT, lease_until INTEGER, result_json TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')), finished_at TEXT
+  )`,
   // ---- Threat Radar ----
   // 같은 대상(패키지·런타임)을 가리키는 신호의 묶음. ranges/patched 는 공식 권고에서만 채운다 (PR 근거)
   `CREATE TABLE IF NOT EXISTS threats (
@@ -228,6 +235,46 @@ export const scans = {
   async existsForSha(repoFullName: string, prNumber: number, sha: string): Promise<boolean> {
     return !!(await q(`SELECT 1 AS x FROM scans WHERE repo_full_name = ? AND pr_number = ? AND head_sha = ? AND status != 'error'`,
       repoFullName, prNumber, sha).first());
+  },
+};
+
+export interface SandboxJobRow {
+  id: number; scan_id: number; user_id: number; repo: string; pr: number; sha: string;
+  status: string; attempts: number; lease: string | null; lease_until: number | null; result_json: string | null;
+}
+export const sandboxJobs = {
+  forScan: (scanId: number, userId: number) => q('SELECT * FROM sandbox_jobs WHERE scan_id = ? AND user_id = ?', scanId, userId).first<SandboxJobRow>(),
+  async enqueue(scanId: number, userId: number, repo: string, pr: number, sha: string) {
+    await q(`UPDATE sandbox_jobs SET status = 'superseded' WHERE repo = ? AND pr = ? AND sha != ? AND status IN ('queued', 'running', 'publishing')`, repo, pr, sha).run();
+    await q(`INSERT INTO sandbox_jobs (scan_id, user_id, repo, pr, sha) VALUES (?, ?, ?, ?, ?) ON CONFLICT(scan_id) DO NOTHING`, scanId, userId, repo, pr, sha).run();
+  },
+  async claim(allowed: string[], lease: string, now: number): Promise<SandboxJobRow | null> {
+    if (!allowed.length) return null;
+    await q(`UPDATE sandbox_jobs SET status = 'failed', finished_at = datetime('now')
+      WHERE status IN ('running','publishing') AND lease_until < ? AND attempts >= 3`, now).run();
+    // Enabling the local worker also picks up the latest already-analyzed PR commit.
+    await q(`INSERT INTO sandbox_jobs (scan_id, user_id, repo, pr, sha)
+      SELECT s.id, s.user_id, s.repo_full_name, s.pr_number, s.head_sha FROM scans s
+      JOIN repos r ON r.full_name = s.repo_full_name AND r.user_id = s.user_id
+      WHERE r.enabled = 1 AND s.status = 'done' AND s.repo_full_name IN (${allowed.map(() => '?').join(',')})
+      AND s.id = (SELECT MAX(n.id) FROM scans n WHERE n.repo_full_name = s.repo_full_name AND n.pr_number = s.pr_number AND n.status = 'done')
+      ON CONFLICT(scan_id) DO NOTHING`, ...allowed).run();
+    return q(`UPDATE sandbox_jobs SET status = CASE WHEN result_json IS NULL THEN 'running' ELSE 'publishing' END,
+      lease = ?, lease_until = ?, attempts = attempts + 1
+      WHERE id = (SELECT j.id FROM sandbox_jobs j JOIN repos r ON r.full_name = j.repo AND r.user_id = j.user_id
+        WHERE r.enabled = 1 AND j.repo IN (${allowed.map(() => '?').join(',')}) AND j.attempts < 3
+        AND (j.status = 'queued' OR (j.status IN ('running', 'publishing') AND j.lease_until < ?))
+        AND NOT EXISTS (SELECT 1 FROM sandbox_jobs busy WHERE busy.status IN ('running','publishing') AND busy.lease_until >= ?)
+        ORDER BY j.id LIMIT 1)
+      RETURNING *`, lease, now + 240_000, ...allowed, now, now).first<SandboxJobRow>();
+  },
+  active: (id: number, lease: string) => q(`SELECT j.* FROM sandbox_jobs j JOIN repos r ON r.full_name = j.repo AND r.user_id = j.user_id
+    WHERE j.id = ? AND j.lease = ? AND j.lease_until >= ? AND j.status IN ('running', 'publishing') AND r.enabled = 1`, id, lease, Date.now()).first<SandboxJobRow>(),
+  async save(id: number, lease: string, json: string) {
+    return (await q(`UPDATE sandbox_jobs SET result_json = ?, status = 'publishing', lease_until = ? WHERE id = ? AND lease = ? AND status IN ('running','publishing')`, json, Date.now() + 90_000, id, lease).run()).meta.changes;
+  },
+  async finish(id: number, lease: string, status: string) {
+    await q(`UPDATE sandbox_jobs SET status = ?, finished_at = datetime('now') WHERE id = ? AND lease = ? AND status IN ('running','publishing')`, status, id, lease).run();
   },
 };
 

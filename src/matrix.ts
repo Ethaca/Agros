@@ -83,6 +83,7 @@ function skipped(p: Plan, request: string, note: string): MatrixCell {
 
 export interface MatrixOptions {
   timeoutMs?: number;
+  maxResponseBytes?: number;
 }
 
 export interface DetailedMatrix {
@@ -120,6 +121,7 @@ export async function runMatrixDetailed(
     }
     const res: HttpResult = await sendAs(baseUrl, p.persona, method, fillPath(path, rowId ?? 1), {
       timeoutMs: opts.timeoutMs,
+      maxResponseBytes: opts.maxResponseBytes,
       json: method === "GET" ? undefined : {},
     });
     const observed = observe({

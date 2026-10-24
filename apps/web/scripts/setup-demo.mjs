@@ -1,14 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
 
 const varsPath = fileURLToPath(new URL('../.dev.vars', import.meta.url));
 const templatePath = fileURLToPath(new URL('../.dev.vars.example', import.meta.url));
-const args = process.argv.slice(2);
-if (args.length !== 0 && (args.length !== 2 || args[0] !== '--url')) {
-  throw new Error('Usage: node scripts/setup-demo.mjs [--url https://your-tunnel.example]');
-}
-const origin = args[1] ? new URL(args[1]) : undefined;
+const { values } = parseArgs({ options: { url: { type: 'string' }, 'sandbox-repos': { type: 'string' } } });
+const origin = values.url ? new URL(values.url) : undefined;
 if (origin && (origin.protocol !== 'https:' || origin.username || origin.password || origin.pathname !== '/' || origin.search || origin.hash)) {
   throw new Error('--url must be an HTTPS origin without a path, credentials or query');
 }
@@ -19,12 +17,18 @@ function set(name, value) {
   const line = `${name}=${JSON.stringify(value)}`;
   text = pattern.test(text) ? text.replace(pattern, () => line) : `${text.trimEnd()}\n${line}\n`;
 }
-for (const name of ['SESSION_SECRET', 'ENCRYPTION_KEY']) {
+for (const name of ['SESSION_SECRET', 'ENCRYPTION_KEY', 'SANDBOX_WORKER_TOKEN']) {
   const current = text.match(new RegExp(`^${name}=(.*)$`, 'm'))?.[1]?.trim();
   if (!current || current === '""' || current === "''") set(name, randomBytes(32).toString('hex'));
 }
 if (origin) set('PUBLIC_URL', origin.origin);
-set('REPORT_LANG', 'en');
+if (!/^REPORT_LANG=\s*["']?(?:en|ko)["']?\s*$/m.test(text)) set('REPORT_LANG', 'en');
+if (values['sandbox-repos'] !== undefined) {
+  const repos = values['sandbox-repos'].split(',').map((r) => r.trim());
+  if (!repos.length || repos.some((r) => !/^[\w.-]+\/[\w.-]+$/.test(r))) throw new Error('--sandbox-repos requires owner/repo names');
+  set('SANDBOX_REPOS', repos.join(','));
+  set('SANDBOX_ENABLED', 'true');
+}
 writeFileSync(varsPath, text, { mode: 0o600 });
 chmodSync(varsPath, 0o600);
 console.log('Local demo settings ready in apps/web/.dev.vars (gitignored, owner-only).');

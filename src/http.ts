@@ -14,6 +14,7 @@ export interface HttpResult {
 
 export interface RequestOptions {
   timeoutMs?: number;
+  maxResponseBytes?: number;
   /** JSON body for non-GET requests. */
   json?: unknown;
   query?: Record<string, string>;
@@ -57,7 +58,21 @@ export async function sendAs(
       body: hasBody ? JSON.stringify(opts.json) : undefined,
       signal: AbortSignal.timeout(opts.timeoutMs ?? REQUEST_TIMEOUT_MS),
     });
-    const body = await res.text();
+    // Targets are untrusted: a huge/never-ending response must not exhaust the scanner host.
+    const reader = res.body?.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    if (reader) {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.length;
+        const limit = opts.maxResponseBytes ?? 1024 * 1024;
+        if (size > limit) { await reader.cancel(); throw new Error(`response exceeds ${limit === 1024 * 1024 ? "1 MiB" : `${limit} byte`} limit`); }
+        chunks.push(value);
+      }
+    }
+    const body = Buffer.concat(chunks).toString("utf8");
     const headers: Record<string, string> = {};
     res.headers.forEach((v, k) => (headers[k] = v));
     return { request, status: res.status, body, headers };

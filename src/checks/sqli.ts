@@ -9,6 +9,7 @@ const show = (r: HttpResult) => (r.status === null ? `no response (${r.error})` 
 
 export interface SqliOptions {
   timeoutMs?: number;
+  maxResponseBytes?: number;
 }
 
 /**
@@ -34,7 +35,7 @@ export async function sqli(cfg: Config, baseUrl: string, manifest: SeedManifest,
     const filled = fillPath(path, rowId);
 
     for (const param of params) {
-      const send = (value: string) => sendAs(baseUrl, persona, method, filled, { query: { [param]: value }, timeoutMs: opts.timeoutMs });
+      const send = (value: string) => sendAs(baseUrl, persona, method, filled, { query: { [param]: value }, timeoutMs: opts.timeoutMs, maxResponseBytes: opts.maxResponseBytes });
       const control = await send("1");
       if (!is2xx(control)) {
         out.push(skip(r.id, persona.name, control.request, `control request failed (${show(control)}); cannot judge injection on "${param}"`));

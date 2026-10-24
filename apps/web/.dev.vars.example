@@ -17,3 +17,9 @@ ENCRYPTION_KEY=
 
 # 선택: Threat Radar 가 GitHub 권고를 수집할 때 쓰는 토큰 (권한 없이 public_repo 읽기면 충분). 없으면 시간당 60회 비인증 한도
 # RADAR_GITHUB_TOKEN=github_pat_...
+
+# 선택: 이 노트북의 Docker Worker. 비워 두면 동적 실행하지 않는다.
+# setup-demo.mjs --sandbox-repos owner/repo 로 키 생성과 저장소 허용 목록을 설정한다.
+# SANDBOX_ENABLED=true
+# SANDBOX_REPOS=owner/repo
+# SANDBOX_WORKER_TOKEN=
