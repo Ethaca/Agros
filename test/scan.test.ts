@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, existsSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, existsSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { runScan } from "../src/scan.js";
 import { Finding, Matrix } from "../src/types.js";
 
@@ -107,4 +107,23 @@ test("env canary leak (flaw 5) is red on the flawed app and the fixed app is cle
   const ok = await run("fixed.config.yaml");
   assert.equal(ok.counts.VULNERABLE, 0);
   assert.equal(ok.counts.SKIPPED, 0, JSON.stringify(ok.findings.filter((f) => f.verdict === "SKIPPED")));
+});
+
+test("static secrets (c): a hardcoded key in the source is yellow, masked everywhere, and does not fail the run", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "argos-scan-static-"));
+  cpSync(resolve(FX), dir, { recursive: true });
+  const KEY = "sk-abcdefghijklmnopqrstuvwx1234";
+  writeFileSync(join(dir, "payments.mjs"), `export const STRIPE = "${KEY}";\n`);
+  const r = await runScan({ configPath: join(dir, "block.config.yaml"), outDir: out(), quiet: true, log: () => {} });
+  const hit = r.findings.find((f) => f.persona === "(static)" && f.verdict === "SUSPECTED")!;
+  assert.equal(hit.proof.request, "payments.mjs:1");
+  assert.match(hit.detail, /sk-a… \(31 chars\)/);
+  const dump = readFileSync(r.files.findings, "utf8") + readFileSync(r.files.matrix, "utf8") + readFileSync(r.files.meta, "utf8");
+  assert.ok(!dump.includes(KEY), "full key must not reach any output file");
+  assert.equal(r.exitCode, 2, "block mode is driven by the red findings of the flawed app, not by the yellow static hit");
+});
+
+test("static secrets (c) reports OK on the fixed fixture app", async () => {
+  const on = await run("fixed.config.yaml");
+  assert.ok(on.findings.some((f) => f.persona === "(static)" && f.verdict === "OK"));
 });

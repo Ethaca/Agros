@@ -94,21 +94,26 @@ describe("demo scenarios", { skip }, () => {
 
       const dry = cli(["fix", "--config", cfg, "--out", out]);
       assert.equal(dry.status, 0, dry.stderr);
-      assert.match(dry.stdout, /verified patch/);
+      assert.match(dry.stdout, /verified patch: limit columns/);
+      assert.match(dry.stdout, /verified patch: scope GET \/api\/datasets\/:id/);
+      assert.match(dry.stdout, /patch rejected: scope POST \/api\/export/, "export has no auth: a patch that cannot work is rejected on its own");
       assert.equal(appSrc(), before, "no --apply: original unchanged");
 
       const applied = cli(["fix", "--config", cfg, "--out", out, "--apply"]);
       assert.equal(applied.status, 0, applied.stderr);
       assert.match(appSrc(), /SELECT id, name, contact_email FROM vendors/);
+      assert.match(appSrc(), /WHERE id = \? AND vendor_id = \?"\)\s*\.get\(req\.params\.id, req\.user\.vendor_id\)/, "owner check added to GET /api/datasets/:id");
       assert.ok(!/SELECT \* FROM vendors/.test(appSrc()));
 
       const after = scan(cfg);
       assert.equal(after.findings.filter((f) => f.check === "secrets" && f.column && f.verdict !== "OK").length, 0, "api_key no longer leaks");
+      assert.equal(redOn(after.findings, "bola", "dataset-read").length, 0, "cross-vendor dataset read is closed");
+      assert.ok(redOn(after.findings, "bola", "export").length > 0, "export is still open: only guidance for it");
       assert.ok(after.counts.VULNERABLE < pristineScan("vendor-platform").counts.VULNERABLE);
       const owners = after.matrix.cells.filter((c) => c.target && c.persona.replace("vendor", "v") === c.target);
       assert.ok(owners.every((c) => c.verdict === "OK"), "owner access still works after the patch");
 
-      if (hasCurl()) assert.deepEqual(manualExploit(dir).flaws, [1, 2, 3, 5], "curl agrees: only flaw 4 is gone");
+      if (hasCurl()) assert.deepEqual(manualExploit(dir).flaws, [2, 3, 5], "curl agrees: flaws 1 (owner check) and 4 (columns) are gone");
     });
   });
 

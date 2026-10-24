@@ -14,7 +14,7 @@ export interface Edit {
 }
 
 export interface Proposal {
-  kind: "select-star" | "guidance";
+  kind: "select-star" | "owner-check" | "guidance";
   /** Keys of the findings this proposal addresses (see findingKey). */
   addresses: string[];
   title: string;
@@ -87,6 +87,50 @@ function selectStarEdits(cfg: Config, srcDir: string, table: string): { edits: E
   return { edits, columns };
 }
 
+const escapeAll = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Express-style handler of `route` -> its statements `...FROM <table> WHERE ... = ?` without the owner column get
+ * `AND <ownerCol> = ?` and the principal appended to the bound args. Only inside that route's handler, so
+ * other routes that share the table are untouched. Verification (same matrix, re-run) decides if it is kept.
+ */
+function ownerCheckEdits(cfg: Config, srcDir: string, resource: Config["resources"][number]): Edit[] {
+  const principal = cfg.fix?.principal;
+  if (!principal || !resource.owner) return [];
+  const [method, full] = resource.route.split(" ", 2) as [string, string];
+  const path = full.split("?")[0]!;
+  const { table, column } = resource.owner;
+  const routeRe = new RegExp(`\\.${method.toLowerCase()}\\(\\s*(["'\`])${escapeAll(path)}\\1`);
+  const nextRoute = /\n\s*(?:app|router)\.(?:get|post|put|patch|delete|all|use)\(/;
+  const stmtRe = new RegExp(
+    `(prepare\\(\\s*)(["'\`])(SELECT[^"'\`]*?\\bFROM\\s+["\`]?${escapeAll(table)}["\`]?\\b[^"'\`]*?\\bWHERE\\s+[^"'\`]*?=\\s*\\?)\\2(\\s*\\)\\s*\\.(?:get|all)\\()([^()]+)\\)`,
+    "gi",
+  );
+  const edits: Edit[] = [];
+  for (const file of sourceFiles(srcDir)) {
+    const text = readFileSync(file, "utf8");
+    const start = routeRe.exec(text);
+    if (!start) continue;
+    const bodyStart = start.index;
+    const rest = text.slice(bodyStart + start[0].length);
+    const next = nextRoute.exec(rest);
+    const bodyEnd = bodyStart + start[0].length + (next ? next.index : rest.length);
+    const body = text.slice(bodyStart, bodyEnd);
+    for (const m of body.matchAll(stmtRe)) {
+      const sql = m[3]!;
+      if (new RegExp(`\\b${escapeAll(column)}\\b`, "i").test(sql.slice(sql.search(/\bWHERE\b/i)))) continue;
+      const abs = bodyStart + m.index!;
+      edits.push({
+        file: relative(srcDir, file),
+        line: text.slice(0, abs).split("\n").length,
+        before: m[0],
+        after: `${m[1]}${m[2]}${sql} AND ${column} = ?${m[2]}${m[4]}${m[5]!.trim()}, ${principal})`,
+      });
+    }
+  }
+  return edits;
+}
+
 /**
  * Turn non-OK findings into proposals. Rule-based only: column-limiting is applied mechanically,
  * ownership / auth / parameterization depend on app code, so those come back as guidance.
@@ -105,7 +149,7 @@ export function proposeFixes(cfg: Config, findings: Finding[], srcDir: string): 
   for (const [table, fs] of secretsByTable) {
     const cols = [...new Set(fs.map((f) => f.column!.split(".")[1]!))];
     const { edits, columns } = selectStarEdits(cfg, srcDir, table);
-    const addresses = fs.map(findingKey);
+    const addresses = [...new Set(fs.map(findingKey))];
     addresses.forEach((a) => handled.add(a));
     out.push({
       kind: edits.length ? "select-star" : "guidance",
@@ -115,6 +159,24 @@ export function proposeFixes(cfg: Config, findings: Finding[], srcDir: string): 
       guidance: edits.length
         ? `Select only non-sensitive columns from ${table}: ${columns.join(", ")}.`
         : `Do not return ${table}.${cols.join(", ")} in responses: replace SELECT * with an explicit column list that excludes it, or strip the field before responding. No "SELECT * FROM ${table}" was found in the sources to patch automatically.`,
+    });
+  }
+
+  // bola: owner check per resource, when the principal expression is configured
+  const bolaByResource = new Map<string, Finding[]>();
+  for (const f of bad.filter((x) => x.check === "bola")) bolaByResource.set(f.resourceId, [...(bolaByResource.get(f.resourceId) ?? []), f]);
+  for (const [id, fs] of bolaByResource) {
+    const res = cfg.resources.find((r) => r.id === id);
+    const edits = res ? ownerCheckEdits(cfg, srcDir, res) : [];
+    if (!res || !edits.length) continue;
+    const addresses = [...new Set(fs.map(findingKey))];
+    addresses.forEach((a) => handled.add(a));
+    out.push({
+      kind: "owner-check",
+      addresses,
+      title: `scope ${res.route} to the caller's org (${res.owner!.column} = ${cfg.fix!.principal})`,
+      edits,
+      guidance: `Restrict the query in ${res.route} to rows where ${res.owner!.column} equals ${cfg.fix!.principal}.`,
     });
   }
 
@@ -129,6 +191,9 @@ export function proposeFixes(cfg: Config, findings: Finding[], srcDir: string): 
       case "sqli":
         return `Route ${res?.route ?? f.resourceId}: pass query parameter(s) ${(res?.params ?? []).join(", ")} as bound parameters (prepared statement), never by string concatenation.`;
       case "secrets":
+        if (f.persona === "(static)") {
+          return `Remove the hardcoded value at ${f.proof.request}: read it from an environment variable or a secret manager, and rotate it (it is in your repository history).`;
+        }
         if (f.env) {
           return `Route ${res?.route ?? f.resourceId} returns the process environment (${f.env} leaked): remove or disable this debug route in production; never serialize process.env into a response.`;
         }

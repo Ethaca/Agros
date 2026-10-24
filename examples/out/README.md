@@ -39,6 +39,7 @@ pnpm run examples:update     # = argos scan --config demo/vendor-platform/argos.
 ```
 
 - `secrets`만 세부 필드가 있다: 응답 속 민감 컬럼은 `column`(`vendors.api_key`), 환경 변수 노출은 `env`(`JWT_SECRET`).
+- 하드코딩 비밀 정적 스캔(`secrets` (c))의 항목은 `resourceId: "(source)"`, `persona: "(static)"`, `proof.request`가 `<파일>:<줄>`이고 `🟡`까지만 나온다. 값은 앞 4자와 길이로만 표시된다.
 - `persona`/`resourceId`가 `(all)`인 항목은 "모든 응답에서 못 찾았다"는 음성 결과(🟢) 또는 판단 불가(⚪)다.
 - 🟢은 "시험한 공격으로는 못 뚫었다"는 뜻이지 보증이 아니다. 한계 문구는 리포트가 싣는다.
 - `SKIPPED`의 `detail`에 이유가 있다(대조 실패, 앱 미기동 등). "안전"으로 읽으면 안 된다.

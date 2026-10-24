@@ -111,3 +111,79 @@ test("env exposure gets specific guidance, never an automatic edit", () => {
   assert.match(p.guidance, /process\.env|environment/);
   assert.match(p.guidance, /debug-env|GET \/debug\/env/);
 });
+
+// ---- owner-check rule ------------------------------------------------------------------------------
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
+import { parseConfig, type Config } from "../src/config.js";
+
+const bolaFinding = (resourceId: string, persona = "vendor2"): Finding => ({
+  check: "bola", resourceId, persona, verdict: "VULNERABLE", proof: { request: "GET /x" }, detail: "d",
+});
+function ownerCfg(principal?: string): Config {
+  const expect = { owner: "allow", other: "deny", anonymous: "deny" };
+  return parseConfig({
+    version: 1,
+    target: { start: "x" },
+    personas: [
+      { name: "vendor1", org: "v1", auth: { type: "bearer", token: "a" } },
+      { name: "vendor2", org: "v2", auth: { type: "bearer", token: "b" } },
+      { name: "anonymous", auth: { type: "none" } },
+    ],
+    resources: [{ id: "dataset-read", route: "GET /api/datasets/:id", owner: { table: "datasets", column: "vendor_id" }, expect }],
+    ...(principal ? { fix: { principal } } : {}),
+  });
+}
+function express(src: string): string {
+  const dir = mkdtempSync(join(tmpdir(), "argos-owner-"));
+  mkdirSync(dirname(join(dir, "app.mjs")), { recursive: true });
+  writeFileSync(join(dir, "app.mjs"), src);
+  return dir;
+}
+const APP = `
+app.get("/api/datasets/:id", auth, (req, res) => {
+  const row = db.prepare("SELECT * FROM datasets WHERE id = ?").get(req.params.id);
+  res.json(row);
+});
+
+app.get("/api/datasets/:id/tasks", auth, (req, res) => {
+  const ds = db.prepare("SELECT id FROM datasets WHERE id = ? AND vendor_id = ?").get(req.params.id, req.user.vendor_id);
+  res.json(ds);
+});
+
+app.get("/api/other", auth, (req, res) => {
+  res.json(db.prepare("SELECT * FROM datasets WHERE id = ?").get(1));
+});
+`;
+
+test("owner-check: adds the owner column and the principal inside that route's handler only", () => {
+  const ps = proposeFixes(ownerCfg("req.user.vendor_id"), [bolaFinding("dataset-read")], express(APP));
+  const p = ps.find((x) => x.kind === "owner-check")!;
+  assert.equal(p.edits.length, 1, "other routes sharing the table are untouched");
+  assert.equal(p.edits[0]!.before, `prepare("SELECT * FROM datasets WHERE id = ?").get(req.params.id)`);
+  assert.equal(p.edits[0]!.after, `prepare("SELECT * FROM datasets WHERE id = ? AND vendor_id = ?").get(req.params.id, req.user.vendor_id)`);
+  assert.equal(p.edits[0]!.line, 3);
+});
+
+test("owner-check: handles multi-line prepare/get chains", () => {
+  const src = `app.get("/api/datasets/:id", auth, (req, res) => {\n  const row = db\n    .prepare("SELECT * FROM datasets WHERE id = ?")\n    .get(req.params.id);\n});\n`;
+  const p = proposeFixes(ownerCfg("req.user.vendor_id"), [bolaFinding("dataset-read")], express(src)).find((x) => x.kind === "owner-check")!;
+  assert.match(p.edits[0]!.after, /WHERE id = \? AND vendor_id = \?"\)\n\s+\.get\(req\.params\.id, req\.user\.vendor_id\)/);
+});
+
+test("owner-check: skips statements that already scope by the owner column; needs the principal", () => {
+  const scoped = `app.get("/api/datasets/:id", auth, (req, res) => {\n  db.prepare("SELECT * FROM datasets WHERE id = ? AND vendor_id = ?").get(req.params.id, req.user.vendor_id);\n});\n`;
+  assert.ok(!proposeFixes(ownerCfg("req.user.vendor_id"), [bolaFinding("dataset-read")], express(scoped)).some((x) => x.kind === "owner-check"));
+  const ps = proposeFixes(ownerCfg(), [bolaFinding("dataset-read")], express(APP));
+  assert.ok(!ps.some((x) => x.kind === "owner-check"), "no fix.principal -> guidance only");
+  assert.equal(ps[0]!.kind, "guidance");
+});
+
+test("owner-check: addresses are unique per finding key and the edit applies cleanly", () => {
+  const dir = express(APP);
+  const ps = proposeFixes(ownerCfg("req.user.vendor_id"), [bolaFinding("dataset-read"), bolaFinding("dataset-read"), bolaFinding("dataset-read", "vendor1")], dir);
+  const p = ps.find((x) => x.kind === "owner-check")!;
+  assert.equal(p.addresses.length, 2);
+  applyEdits(dir, p.edits);
+  assert.match(readFileSync(join(dir, "app.mjs"), "utf8"), /AND vendor_id = \?"\)\.get\(req\.params\.id, req\.user\.vendor_id\)/);
+});

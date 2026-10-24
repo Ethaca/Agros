@@ -81,7 +81,7 @@ export async function runScan(opts: ScanOptions): Promise<ScanResult> {
         throw new ScanError("aborted");
       }
       const { matrix, raw } = await runMatrixDetailed(cfg, target.baseUrl, manifest);
-      const findings = await runChecks({ cfg, baseUrl: target.baseUrl, matrix, raw, manifest });
+      const findings = await runChecks({ cfg, baseUrl: target.baseUrl, matrix, raw, manifest, srcDir: resolve(dirname(configPath), cfg.target.cwd) });
       return { matrix, findings };
     })();
     // If the timeout wins, `work` keeps running; swallow its late rejection.

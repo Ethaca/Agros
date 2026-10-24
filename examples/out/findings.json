@@ -794,5 +794,15 @@
     },
     "detail": "environment variable STRIPE_SECRET_KEY is exposed in the response of GET /debug/env",
     "env": "STRIPE_SECRET_KEY"
+  },
+  {
+    "check": "secrets",
+    "resourceId": "(source)",
+    "persona": "(static)",
+    "verdict": "OK",
+    "proof": {
+      "request": "-"
+    },
+    "detail": "no hardcoded secret pattern in 2 source files"
   }
 ]

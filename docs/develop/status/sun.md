@@ -34,12 +34,13 @@
 | ✅ | http + matrix | `src/http.ts`, `src/matrix.ts` | 10개 |
 | ✅ | bola + unauth + sqli | `src/checks/*` | 14개 |
 | ✅ | secrets (a)(b) | `src/checks/secrets.ts` | 7개 |
+| ✅ | secrets (c) 정적 스캔 | `src/checks/static-secrets.ts` | 10개 |
 | ✅ | scan 명령 (fixture e2e) | `src/scan.ts`, `src/cli.ts` | 11개 |
-| ✅ | fix (규칙 기반 + 재검증) | `src/fix/*` | 8개 |
+| ✅ | fix (규칙 기반 + 제안별 누적 재검증) | `src/fix/*` | 12개 |
 | ✅ | 시나리오 (데모 앱, 실제 CLI) | `test/scenarios/*` | 16개 |
 | ✅ | 출력 예시 + `scan-meta.json` | `examples/out/*`, `src/types.ts`(`ScanMeta`) | 3개 |
 
-단위 테스트 82개 + 시나리오 16개 모두 통과.
+단위 테스트 96개 + 시나리오 16개 모두 통과.
 
 ## 완료 내용
 
@@ -53,7 +54,8 @@
 - **scan:** `argos scan [--config] [--checks] [--out] [--timeout]`. 임시 복사본 → 시드 → 앱 기동 → 매트릭스 → 점검 → `out/matrix.json`, `out/findings.json`. 종료 코드 0/1/2, 전체 타임아웃 기본 5분.
 - **scan-meta.json:** `scan`이 `out/scan-meta.json`도 쓴다(`ScanMeta` 계약). 증빙 헤더 재료: 설정·시드 스키마·`matrix.json`·`findings.json`의 SHA-256, 실행 시각(UTC), 도구 버전, 점검·페르소나·시험 리소스 목록, 판정별 개수. 절대 경로·비밀 없음. A의 `report`는 해시를 직접 계산하지 않고 이 파일을 읽으면 된다.
 - **출력 예시:** `examples/out/`(`matrix.json`, `findings.json`, `scan-meta.json`, `README.md`). `vendor-platform` 실제 스캔 결과이고 필드 설명이 README에 있다. 테스트가 스키마·해시·최신 여부를 지킨다.
-- **fix:** `argos fix [--config] [--out] [--apply]`. 기계적으로 고치는 건 `SELECT * FROM <table>` → 비민감 컬럼 목록뿐, 소유자 검사·인증·파라미터화·환경 노출은 수정 지침만 출력. 패치는 임시 복사본에 적용해 **같은 매트릭스를 다시 실행**하고, ① 대상 Finding 해결 ② 대조 칸 유지 ③ 새 🔴 없음 ④ 앱 기동일 때만 채택. 원본은 `--apply`일 때만 수정. 결과는 `out/before/`, `out/after/`, `out/fix.json`.
+- **secrets (c):** 소스에서 `sk-…`, `AKIA…`, 개인 키 블록, `*_secret/token/password/api_key = "…"` 패턴 검색. 휴리스틱이라 🟡(SUSPECTED)만 낸다. 값은 앞 4자 + 길이로만 표시하고 소스 줄은 싣지 않는다. 시드·테스트·fixtures·examples·`argos*.yaml`·`node_modules`·락 파일·`.env.example`은 기본 제외, `secrets.staticScan: false`로 끄고 `secrets.staticExclude`로 경로를 더한다. Finding은 `resourceId: "(source)"`, `persona: "(static)"`, `proof.request: "<파일>:<줄>"`.
+- **fix:** `argos fix [--config] [--out] [--apply]`. 기계적으로 고치는 것은 두 가지다. ① `SELECT * FROM <table>` → 비민감 컬럼 목록. ② (설정에 `fix.principal`이 있을 때) 라우트 핸들러 안의 `SELECT … WHERE … = ?`에 `AND <소유 컬럼> = ?`와 호출자 값(`req.user.vendor_id`)을 붙임. 그 외(인증·파라미터화·환경 노출·하드코딩)는 수정 지침만 출력. 제안마다 임시 복사본에 **누적 적용**하고 **같은 매트릭스를 다시 실행**해 ① 대상 Finding 해결 ② 대조 칸 유지 ③ 새 🔴 없음 ④ 앱 기동일 때만 채택한다. 실패한 제안만 거부되고 나머지는 채택된다(예: 인증 없는 `/api/export`의 소유자 검사는 `req.user`가 없어 거부). 원본은 `--apply`일 때 채택된 것만 수정. 결과는 `out/before/`, `out/after/`, `out/fix.json`(제안별 `status`·`reasons`).
 
 ## 데모 앱 실측 (A의 `demo/`)
 
@@ -63,7 +65,7 @@
 | `realistic-app` | 0 | 0 | 0 | 오탐 0 (구 `clean`) |
 
 - `manual-exploit.sh`와 일치(`vendor-platform` 5/5 재현, 안전한 앱 0/5).
-- `fix`: `SELECT * FROM vendors` → `SELECT id, name, contact_email FROM vendors`(안전한 앱의 수정과 동일). 🔴 25→19, 🟡 3→0, 원본 불변.
+- `fix`(데모 설정에 `fix.principal: req.user.vendor_id` 추가): 열 제한(`SELECT id, name, contact_email FROM vendors`)과 `GET /api/datasets/:id`의 소유자 검사(`… WHERE id = ? AND vendor_id = ?` + `req.user.vendor_id`)가 채택되고, `POST /api/export`는 거부. 🔴 25→13, 🟡 3→0, 원본 불변. curl 재현도 결함 1·4가 사라져 `[2,3,5]`.
 - 데모에서 발견해 고친 것: `?search=`에서 sqli 파라미터 읽기 / 목록 라우트 오탐 / 다른 테이블 마커 인정 / `<x>_id` 시드 연결 / 증명된 유출은 대조 없이 보고 / secrets (b) 구현 / 모두 거부된 리소스는 유출 없음으로 판정.
 
 ## Step 8: 시나리오 기반 테스트 (구현됨)
@@ -103,7 +105,7 @@
 pnpm install                 # 최초 1회
 (cd demo/vendor-platform && npm install)   # 데모 앱 의존성 (realistic-app도 동일)
 pnpm run typecheck           # 타입 검사
-pnpm test                    # 단위 82개 + 시나리오 16개
+pnpm test                    # 단위 96개 + 시나리오 16개
 pnpm run examples:update     # examples/out 재생성 (출력 형식·데모 앱이 바뀌었을 때)
 pnpm run test:scenarios      # 시나리오만 (데모 앱 실제 CLI)
 
@@ -143,7 +145,8 @@ pnpm argos scan --config test/fixtures/vuln-app/block.config.yaml; echo $?      
 - **환경을 덤프하는 응답(`/debug/env`)은 증거에 본문을 싣지 않는다**(`body withheld`). 실제 스캔 출력에 호스트의 `PATH`/홈 경로가 섞이는 문제를 예시를 만들다 발견해 고쳤다.
 - 소유 행이 없는 리소스는 거부 기대 칸의 2xx를 🔴로 판정한다(`POST /api/export`, `/debug/env`).
 - secrets (b)는 매트릭스 요청의 응답만 검색한다(오류 유도 요청은 아직 없음). (c) 정적 스캔은 없다(SHOULD).
-- 자동 수정은 `SELECT *` 열 제한만 지원한다. `req.user.vendor_id` 기반 소유자 검사 자동 수정은 없다.
+- 자동 수정은 열 제한과 Express 스타일 핸들러의 소유자 검사만 지원한다(`prepare("…").get/all(…)` 형태, `fix.principal` 필요). 인증 추가·파라미터화·환경 노출 제거는 지침만.
+- **A의 데모 설정 2개에 `fix.principal`을 추가했다**(`demo/*/argos.config.yaml`). A에게 알릴 것. 설정 계약에도 `secrets.staticScan`/`staticExclude`, `fix.principal`이 늘었다.
 - `seed.rows`는 지원하지 않는다(지정하면 오류). 조직당 한 행만 시드한다.
 - 마스킹이 앞 6자(`ARGOS_`)만 남겨 마커끼리 구분이 안 된다. 리포트에서 필요하면 A와 논의.
 - `node:sqlite`가 ExperimentalWarning을 출력한다(동작에는 문제 없음).
@@ -158,5 +161,6 @@ pnpm argos scan --config test/fixtures/vuln-app/block.config.yaml; echo $?      
 
 - `feature/sun`, `main`: `2a90f55`까지 push (데모 앱 대응 수정·secrets (b) 포함).
 - `feature/sun`, `main`: `99ee2e3`까지 push (시나리오 테스트, `demo/realistic-app` 이름 변경 포함).
-- 미커밋: `scan-meta.json`, `examples/out/`, 환경 덤프 증거 처리 수정, 이 문서.
+- `feature/sun`, `main`: `edca2c3`까지 push (scan-meta.json, 출력 예시 포함).
+- 미커밋: secrets (c), 소유자 검사 자동 수정, 제안별 누적 검증, 데모 설정의 `fix.principal`, 예시 재생성, 이 문서.
 - (이전 기록) `demo/` 이름 변경(`clean` → `realistic-app`), `docs/SPEC.md`·`test/demo-config.test.ts`의 이름 반영.

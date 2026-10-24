@@ -56,12 +56,25 @@ export const Config = z
         envCanaries: z
           .array(z.string())
           .default(["JWT_SECRET", "SECRET_KEY", "API_KEY", "STRIPE_SECRET_KEY"]),
+        /** (c) look for hardcoded secrets in the target's source files. */
+        staticScan: z.boolean().default(true),
+        /** Extra path substrings to skip, on top of the defaults (seed*, tests, fixtures, examples, argos config). */
+        staticExclude: z.array(z.string()).default([]),
       })
       .default({
         sensitiveColumns: ["api_key", "token", "secret", "password"],
         allowOwnerSecretRead: false,
         envCanaries: ["JWT_SECRET", "SECRET_KEY", "API_KEY", "STRIPE_SECRET_KEY"],
+        staticScan: true,
+        staticExclude: [],
       }),
+    /** Hints for `argos fix`. Without `principal` only column limiting is applied automatically. */
+    fix: z
+      .strictObject({
+        /** Source expression for the caller's org inside a handler, e.g. `req.user.vendor_id`. */
+        principal: z.string().min(1).optional(),
+      })
+      .optional(),
     mode: z.enum(["report", "block"]).default("report"),
     llm: z
       .strictObject({

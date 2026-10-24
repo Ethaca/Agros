@@ -3,14 +3,14 @@
     "name": "argos",
     "version": "0.0.0"
   },
-  "startedAt": "2026-10-24T04:34:44.823Z",
-  "finishedAt": "2026-10-24T04:34:45.250Z",
-  "durationMs": 427,
+  "startedAt": "2026-10-24T04:41:50.954Z",
+  "finishedAt": "2026-10-24T04:41:51.393Z",
+  "durationMs": 439,
   "target": "vendor-platform",
   "mode": "report",
   "config": {
     "file": "argos.config.yaml",
-    "sha256": "bf7a70a11aeddc096b4e54db1b631278635c80eb778b3997a05e4228a098cc79"
+    "sha256": "42d07c29ab032240f16607a8cf4d24c5ef65bf4f82c1a150b1d6ab27fc196143"
   },
   "seed": {
     "schema": {
@@ -92,11 +92,11 @@
   ],
   "results": {
     "cells": 72,
-    "findings": 65,
+    "findings": 66,
     "counts": {
       "VULNERABLE": 25,
       "SUSPECTED": 3,
-      "OK": 37,
+      "OK": 38,
       "SKIPPED": 0
     }
   },
@@ -107,7 +107,7 @@
     },
     "findings": {
       "file": "findings.json",
-      "sha256": "4afaa72d8039dfaa81687190bcec1e12670a932a5af230b298806b4201583fa4"
+      "sha256": "68cfd654754bd173dcf09d4126b61557d3edf2c251b8dffc460763359c92a499"
     }
   }
 }
