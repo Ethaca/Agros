@@ -7,6 +7,10 @@ import { realpathSync } from "node:fs";
 import type { Config } from "./config.js";
 import { containerSpec, startContainer } from "./container.js";
 import { RunnerError } from "./errors.js";
+import { launchJvm } from "./jvm/launch.js";
+import { redactLines } from "./jvm/redact.js";
+import { runtimeOf, type Runtime } from "./jvm/settings.js";
+import type { StackExtras } from "./stack.js";
 
 export { RunnerError };
 
@@ -17,7 +21,16 @@ export type Isolation = "process" | "container";
 export interface RunnerOptions {
   /** Directory the config lives in; target.cwd resolves against it. Default: process.cwd(). */
   baseDir?: string;
+  /** Readiness budget. Default 30s (node) / 180s (jvm). */
   readyTimeoutMs?: number;
+  /** Build budget for the jvm runtime (separate from readiness and scan budgets). Default 15 min. */
+  prepareTimeoutMs?: number;
+  /**
+   * Ready = the readiness path answers with any status < 500 (e.g. 401/403 from a secured app), not only 200.
+   * Default false (node) / true (jvm: Spring Boot's web server only accepts connections after the context, incl.
+   * Flyway/Liquibase migrations, has started, so any HTTP answer means the app is up).
+   */
+  readyAnyStatus?: boolean;
   killGraceMs?: number;
   /** Suppress the isolation warning (tests). */
   quiet?: boolean;
@@ -25,12 +38,20 @@ export interface RunnerOptions {
   beforeStart?: (workdir: string) => void | Promise<void>;
   /** Extra environment variables for the app (e.g. env canaries). Applied after target.env. */
   extraEnv?: Record<string, string>;
-  /** Overrides cfg.target.isolation. */
+  /** Overrides cfg.target.isolation. The jvm runtime always runs in containers. */
   isolation?: Isolation;
+  /** Runs once the app is ready (e.g. seeding through `target.db` after the app applied its migrations). A throw stops the target. */
+  afterReady?: (target: RunningTarget) => void | Promise<void>;
+  /** Aborting stops the build / readiness wait and cleans everything up. */
+  signal?: AbortSignal;
 }
 
-export interface RunningTarget {
+export interface RunningTarget extends StackExtras {
   isolation: Isolation;
+  /** "node" unless target.runtime is "jvm". */
+  runtime?: Runtime;
+  /** jvm: per-run id; all of the run's containers and networks carry the label argos.run=<id>. */
+  runId?: string;
   /** Container image when isolation is "container". */
   image: string | null;
   baseUrl: string;
@@ -69,16 +90,16 @@ export function buildEnv(cfg: Config, port: number, home: string, extra: Record<
   };
 }
 
-async function waitReady(url: string, deadline: number, exited: () => boolean): Promise<boolean> {
+async function waitReady(url: string, deadline: number, exited: () => boolean, anyStatus = false, intervalMs = 150, signal?: AbortSignal): Promise<boolean> {
   while (Date.now() < deadline) {
-    if (exited()) return false;
+    if (signal?.aborted || exited()) return false;
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(2000) });
-      if (res.status === 200) return true;
+      if (res.status === 200 || (anyStatus && res.status < 500)) return true;
     } catch {
       /* not up yet */
     }
-    await sleep(150);
+    await sleep(intervalMs);
   }
   return false;
 }
@@ -161,6 +182,7 @@ async function launchContainer(cfg: Config, opts: RunnerOptions, workdir: string
 }
 
 export async function startTarget(cfg: Config, opts: RunnerOptions = {}): Promise<RunningTarget> {
+  if (runtimeOf(cfg) === "jvm") return startJvmTarget(cfg, opts);
   const { readyTimeoutMs = 30_000, killGraceMs = 5_000 } = opts;
   const isolation: Isolation = opts.isolation ?? cfg.target.isolation;
   if (!opts.quiet) {
@@ -226,7 +248,7 @@ export async function startTarget(cfg: Config, opts: RunnerOptions = {}): Promis
     throw new RunnerError(reason, tail);
   }
 
-  return {
+  const target: RunningTarget = {
     isolation,
     image: launched.image ?? null,
     baseUrl: launched.baseUrl,
@@ -235,4 +257,91 @@ export async function startTarget(cfg: Config, opts: RunnerOptions = {}): Promis
     logs: launched.logs,
     stop,
   };
+  if (opts.afterReady) {
+    try {
+      await opts.afterReady(target);
+    } catch (e) {
+      await stop();
+      throw e;
+    }
+  }
+  return target;
+}
+
+function copyTarget(srcDir: string, workdir: string): void {
+  cpSync(srcDir, workdir, {
+    recursive: true,
+    filter: (p) => {
+      const rel = p === srcDir ? "" : p.slice(srcDir.length + 1);
+      return !COPY_EXCLUDES.has(rel.split(sep)[0] ?? "");
+    },
+  });
+}
+
+/** JVM/Spring: always containerized (build + app + postgres + issuer on a per-run internal network); never the host. */
+async function startJvmTarget(cfg: Config, opts: RunnerOptions): Promise<RunningTarget> {
+  const { readyTimeoutMs = 180_000, prepareTimeoutMs = 15 * 60_000, readyAnyStatus = true } = opts;
+  if (opts.isolation === "process") throw new RunnerError("target.runtime jvm runs only with container isolation (never on the host)");
+  if (!opts.quiet) console.error("🔒 jvm runtime: isolated build, internal network (app + postgres + test issuer), read-only root, non-root, resource limits");
+
+  const srcDir = resolve(opts.baseDir ?? process.cwd(), cfg.target.cwd);
+  const root = mkdtempSync(join(tmpdir(), "argos-run-"));
+  const workdir = join(root, "app");
+  const cleanup = () => rmSync(root, { recursive: true, force: true });
+  try {
+    copyTarget(srcDir, workdir);
+  } catch (e) {
+    cleanup();
+    throw new RunnerError(`cannot copy target dir ${srcDir}: ${(e as Error).message}`);
+  }
+
+  let launched: Awaited<ReturnType<typeof launchJvm>>;
+  try {
+    await opts.beforeStart?.(workdir);
+    launched = await launchJvm(cfg, { workdir, root, extraEnv: opts.extraEnv, prepareTimeoutMs, signal: opts.signal });
+  } catch (e) {
+    cleanup();
+    throw e;
+  }
+
+  let stopped: Promise<void> | undefined;
+  const stop = () =>
+    (stopped ??= (async () => {
+      await launched.stop();
+      cleanup();
+    })());
+
+  const ok = await waitReady(launched.baseUrl + cfg.target.readyPath, Date.now() + readyTimeoutMs, launched.exited, readyAnyStatus, 500, opts.signal);
+  if (!ok) {
+    const code = launched.exitCode();
+    const reason = opts.signal?.aborted
+      ? "aborted while waiting for the target"
+      : code !== undefined
+        ? `target exited with code ${code} before becoming ready`
+        : `target not ready: GET ${cfg.target.readyPath} did not return ${readyAnyStatus ? "a non-5xx status" : "200"} within ${readyTimeoutMs}ms`;
+    const tail = redactLines(launched.logs(80), launched.secrets());
+    await stop();
+    throw new RunnerError(`${reason} [argos run ${launched.runId}]`, tail);
+  }
+
+  const target: RunningTarget = {
+    isolation: "container",
+    runtime: "jvm",
+    runId: launched.runId,
+    image: launched.image,
+    baseUrl: launched.baseUrl,
+    port: Number(new URL(launched.baseUrl).port),
+    workdir,
+    logs: launched.logs,
+    stop,
+    ...launched.extras,
+    notes: [...(launched.extras.notes ?? []), `readiness: GET ${cfg.target.readyPath} ${readyAnyStatus ? "answered with a non-5xx status" : "returned 200"}`],
+  };
+  try {
+    await opts.afterReady?.(target);
+  } catch (e) {
+    await stop();
+    throw e instanceof RunnerError ? e : new RunnerError(`afterReady failed: ${redactLines([(e as Error).message], launched.secrets())[0]}`);
+  }
+  return target;
 }

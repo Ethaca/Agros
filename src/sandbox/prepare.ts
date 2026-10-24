@@ -49,7 +49,7 @@ try {
   // Never reuse source tokens, source env values, npm scripts, or customer container/start settings.
   cfg.personas = orgs.map((org) => ({ name: `user-${org}`, org, auth: { type: "bearer" as const, token: `argos-test-${randomBytes(24).toString("hex")}` } }));
   cfg.personas.push({ name: "anonymous", auth: { type: "none" } });
-  cfg.target = { start: `node ${entry}`, cwd: ".", baseUrl: "http://127.0.0.1:0", readyPath: cfg.target.readyPath, isolation: "container", container: { memory: "512m", cpus: "1", pids: 128 }, env: {
+  cfg.target = { start: `node ${entry}`, cwd: ".", baseUrl: "http://127.0.0.1:0", readyPath: cfg.target.readyPath, isolation: "container", runtime: "node", container: { memory: "512m", cpus: "1", pids: 128 }, env: {
     [facts.auth.tokenEnv]: cfg.personas.filter((p) => p.auth.type === "bearer").map((p) => `${p.auth.type === "bearer" ? p.auth.token : ""}:${p.org}`).join(","),
     [facts.db.envName]: "/tmp/argos-test.db",
   } };

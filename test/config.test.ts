@@ -65,6 +65,67 @@ test("matrix contract schema accepts the SPEC example", () => {
   assert.equal(m.cells[0]!.verdict, "VULNERABLE");
 });
 
+// --- runtime jvm (Spring) additions: optional, additive, version stays 1
+
+import { springRaw } from "./helpers/spring-config.js";
+import { actionOf, dbImageOf, routeParams } from "../src/config.js";
+
+test("jvm config: valid, with documented defaults", () => {
+  const cfg = parseConfig(springRaw());
+  assert.equal(cfg.version, 1);
+  assert.equal(cfg.target.runtime, "jvm");
+  assert.deepEqual(cfg.db, {
+    kind: "postgres", migrations: "flyway",
+    env: { url: "SPRING_DATASOURCE_URL", user: "SPRING_DATASOURCE_USERNAME", password: "SPRING_DATASOURCE_PASSWORD" },
+  });
+  assert.deepEqual(cfg.auth!.env, {
+    jwkSetUri: "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI",
+    issuerUri: "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI",
+  });
+  assert.deepEqual(cfg.auth!.claims.roles, { claim: "roles" });
+  const minimal = parseConfig({ ...springRaw(), db: { kind: "postgres" }, auth: { type: "jwt-issuer" } });
+  assert.equal(minimal.db!.migrations, "app");
+  assert.equal(minimal.auth!.claims.subject, "id");
+  assert.equal(dbImageOf(minimal), "postgres:16-alpine");
+  const viaContainer = parseConfig({ ...springRaw(), db: { kind: "postgres" }, target: { ...springRaw().target, container: { dbImage: "postgres:17" } } });
+  assert.equal(dbImageOf(viaContainer), "postgres:17");
+  assert.equal(dbImageOf(parseConfig({ ...springRaw(), db: { kind: "postgres", image: "postgres:15" }, target: { ...springRaw().target, container: { dbImage: "postgres:17" } } })), "postgres:15");
+});
+
+test("legacy configs are unchanged: runtime node, no db/auth, bearer personas", () => {
+  const cfg = loadConfig("examples/argos.config.yaml");
+  assert.equal(cfg.target.runtime, "node");
+  assert.equal(cfg.db, undefined);
+  assert.equal(cfg.auth, undefined);
+  assert.deepEqual(Object.keys(cfg.target.container).sort(), ["cpus", "memory", "pids"]);
+});
+
+test("jvm config: rule violations name the field", () => {
+  const bad = (mut: (r: any) => void, re: RegExp) => {
+    const r = springRaw();
+    mut(r);
+    assert.throws(() => parseConfig(r), re);
+  };
+  bad((r) => delete r.auth, /personas\.0\.auth: auth\.type "jwt" needs the top-level `auth` section/);
+  bad((r) => (r.personas[0].auth = { type: "bearer", token: "x" }, r.personas[0].invalid = "expired"), /personas\.0\.invalid: only valid with auth\.type "jwt"/);
+  bad((r) => (r.target.runtime = "node"), /db: requires target\.runtime: jvm|auth: requires/);
+  bad((r) => (r.target.isolation = "process"), /target\.isolation: runtime jvm runs only in containers/);
+  bad((r) => (r.resources[3].pathParams.nope = { table: "x" }), /resources\.3\.pathParams\.nope: route has no :nope/);
+  bad((r) => (r.seed = { schema: "s.sql", dbPath: "d.db" }), /seed: use either seed/);
+  bad((r) => (r.personas[2].name = "x", r.personas[2].user = undefined, r.personas[1].user = "x"), /duplicate "orgA\/x"/);
+  bad((r) => (r.resources[1].owner.scope = "team"), /resources\.1\.owner\.scope/);
+  bad((r) => (r.db.migrations = "hibernate"), /db\.migrations/);
+});
+
+test("{param} routes count as parameterized; action defaults from the method", () => {
+  assert.deepEqual(routeParams("/api/projects/{projectId}/documents/:documentId"), ["projectId", "documentId"]);
+  const r = springRaw();
+  delete r.resources[2].owner; // GET /api/projects/{projectId} without owner
+  assert.throws(() => parseConfig(r), /resources\.2\.owner: required for parameterized GET routes/);
+  const cfg = parseConfig(springRaw());
+  assert.deepEqual(cfg.resources.map(actionOf), ["read", "read", "read", "read", "update", "read", "create"]);
+});
+
 test("report.lang defaults to en, accepts ko, rejects anything else", () => {
   assert.equal(parseConfig(example()).report.lang, "en");
   const ko = example();

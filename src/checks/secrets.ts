@@ -1,4 +1,4 @@
-import type { Config } from "../config.js";
+import { hasCredentials, type Config } from "../config.js";
 import type { HttpResult } from "../http.js";
 import { maskMarker, type SeedManifest } from "../seed.js";
 import type { Finding, Matrix } from "../types.js";
@@ -91,7 +91,7 @@ function secretsInResponses(cfg: Config, matrix: Matrix, raw: (HttpResult | unde
 
     for (const s of manifest.secrets) {
       if (!haystack.includes(s.marker)) continue;
-      const own = !!persona?.org && persona.org === s.org;
+      const own = !!persona?.org && hasCredentials(persona) && persona.org === s.org;
       if (own && cfg.secrets.allowOwnerSecretRead) continue;
       const key = `${c.resource}|${c.persona}|${s.marker}`;
       if (seen.has(key)) continue;
@@ -105,7 +105,7 @@ function secretsInResponses(cfg: Config, matrix: Matrix, raw: (HttpResult | unde
         proof: { request: c.evidence.request, ...(r.status !== null ? { status: r.status } : {}), marker: maskMarker(s.marker) },
         detail: own
           ? `owner re-exposed own secret in ${s.table}.${s.column}`
-          : `${persona?.org ? c.persona : "anonymous"} received ${s.org}'s secret from ${s.table}.${s.column}`,
+          : `${persona?.org && hasCredentials(persona) ? c.persona : persona?.invalid ? `${c.persona} (invalid token)` : "anonymous"} received ${s.org}'s secret from ${s.table}.${s.column}`,
         column: `${s.table}.${s.column}`,
       });
     }
