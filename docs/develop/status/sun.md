@@ -36,9 +36,10 @@
 | ✅ | secrets (a)(b) | `src/checks/secrets.ts` | 7개 |
 | ✅ | scan 명령 (fixture e2e) | `src/scan.ts`, `src/cli.ts` | 11개 |
 | ✅ | fix (규칙 기반 + 재검증) | `src/fix/*` | 8개 |
-| ✅ | 시나리오 (데모 앱, 실제 CLI) | `test/scenarios/*` | 15개 |
+| ✅ | 시나리오 (데모 앱, 실제 CLI) | `test/scenarios/*` | 16개 |
+| ✅ | 출력 예시 + `scan-meta.json` | `examples/out/*`, `src/types.ts`(`ScanMeta`) | 3개 |
 
-단위 테스트 78개(위 표 합계 75개 + A의 `test/demo-config.test.ts` 3개) + 시나리오 15개 모두 통과.
+단위 테스트 82개 + 시나리오 16개 모두 통과.
 
 ## 완료 내용
 
@@ -50,6 +51,8 @@
 - **sqli:** 리소스의 `params`와 라우트의 `?search=`에서 파라미터를 읽어 `"1"`(대조) → `"'"` → `"''"` 3단계. 대조 2xx + `'` 5xx + `''` 2xx면 🔴, 대조 실패는 SKIPPED.
 - **secrets:** (a) 매트릭스 요청의 원본 응답(본문·헤더)에서 비밀 마커 검색. 비소유자·익명 🔴, 소유자 재노출 🟡(`allowOwnerSecretRead`로 허용). (b) 앱 환경에 `ARGOS_ENV_<NAME>_<hex6>`를 주입하고 응답에서 검색. "유출 없음"은 2xx가 있거나 모두 기대대로 거부된 리소스에만 인정.
 - **scan:** `argos scan [--config] [--checks] [--out] [--timeout]`. 임시 복사본 → 시드 → 앱 기동 → 매트릭스 → 점검 → `out/matrix.json`, `out/findings.json`. 종료 코드 0/1/2, 전체 타임아웃 기본 5분.
+- **scan-meta.json:** `scan`이 `out/scan-meta.json`도 쓴다(`ScanMeta` 계약). 증빙 헤더 재료: 설정·시드 스키마·`matrix.json`·`findings.json`의 SHA-256, 실행 시각(UTC), 도구 버전, 점검·페르소나·시험 리소스 목록, 판정별 개수. 절대 경로·비밀 없음. A의 `report`는 해시를 직접 계산하지 않고 이 파일을 읽으면 된다.
+- **출력 예시:** `examples/out/`(`matrix.json`, `findings.json`, `scan-meta.json`, `README.md`). `vendor-platform` 실제 스캔 결과이고 필드 설명이 README에 있다. 테스트가 스키마·해시·최신 여부를 지킨다.
 - **fix:** `argos fix [--config] [--out] [--apply]`. 기계적으로 고치는 건 `SELECT * FROM <table>` → 비민감 컬럼 목록뿐, 소유자 검사·인증·파라미터화·환경 노출은 수정 지침만 출력. 패치는 임시 복사본에 적용해 **같은 매트릭스를 다시 실행**하고, ① 대상 Finding 해결 ② 대조 칸 유지 ③ 새 🔴 없음 ④ 앱 기동일 때만 채택. 원본은 `--apply`일 때만 수정. 결과는 `out/before/`, `out/after/`, `out/fix.json`.
 
 ## 데모 앱 실측 (A의 `demo/`)
@@ -80,6 +83,7 @@
 | S7 | 모드와 종료 코드 | `mode: report`는 🔴이 있어도 0, `mode: block`은 2 |
 | S8 | 같은 설정으로 두 번 돌린다 | 두 매트릭스가 같다 (재현성) |
 | S9 | 결과 파일이 안전하다 | `matrix.json`, `findings.json`, `fix.json`에 마커·비밀·카나리 전체 값이 없다 |
+| S12 | 출력 예시가 최신이다 | `examples/out/`가 새로 스캔한 결과와 일치(시각 제외) |
 | S10 | 시연 3분 흐름 | `scan` → `fix` → 재스캔의 총 시간을 재서 기록 (목표 60초/scan, 기준 6) |
 | S0, S11 | (A 구현 후 추가) | `init` 초안이 스키마를 통과하고 기동 검증까지, `report` 증빙 헤더 해시가 재계산 값과 일치 (기준 3·4) |
 
@@ -99,7 +103,8 @@
 pnpm install                 # 최초 1회
 (cd demo/vendor-platform && npm install)   # 데모 앱 의존성 (realistic-app도 동일)
 pnpm run typecheck           # 타입 검사
-pnpm test                    # 단위 78개 + 시나리오 15개
+pnpm test                    # 단위 82개 + 시나리오 16개
+pnpm run examples:update     # examples/out 재생성 (출력 형식·데모 앱이 바뀌었을 때)
 pnpm run test:scenarios      # 시나리오만 (데모 앱 실제 CLI)
 
 # 파일 하나만
@@ -134,7 +139,8 @@ pnpm argos scan --config test/fixtures/vuln-app/block.config.yaml; echo $?      
 
 ## 알아둘 것
 
-- **A에게 알릴 계약 추가:** `MatrixCell.target`, `SeedManifest.ids`/`envCanaries`, 라우트의 `?search=`를 sqli가 읽는 것(리소스 `params`도 가능). `report`는 `out/matrix.json`, `out/findings.json`을 읽는다.
+- **A에게 알릴 계약 추가:** `MatrixCell.target`, `SeedManifest.ids`/`envCanaries`, 라우트의 `?search=`를 sqli가 읽는 것(리소스 `params`도 가능), `ScanMeta`. `report`는 `out/matrix.json`, `out/findings.json`, `out/scan-meta.json`을 읽는다(예시: `examples/out/`).
+- **환경을 덤프하는 응답(`/debug/env`)은 증거에 본문을 싣지 않는다**(`body withheld`). 실제 스캔 출력에 호스트의 `PATH`/홈 경로가 섞이는 문제를 예시를 만들다 발견해 고쳤다.
 - 소유 행이 없는 리소스는 거부 기대 칸의 2xx를 🔴로 판정한다(`POST /api/export`, `/debug/env`).
 - secrets (b)는 매트릭스 요청의 응답만 검색한다(오류 유도 요청은 아직 없음). (c) 정적 스캔은 없다(SHOULD).
 - 자동 수정은 `SELECT *` 열 제한만 지원한다. `req.user.vendor_id` 기반 소유자 검사 자동 수정은 없다.
@@ -151,4 +157,6 @@ pnpm argos scan --config test/fixtures/vuln-app/block.config.yaml; echo $?      
 ## git
 
 - `feature/sun`, `main`: `2a90f55`까지 push (데모 앱 대응 수정·secrets (b) 포함).
-- 미커밋: 시나리오 테스트(`test/scenarios/`, `package.json` 스크립트), 이 문서, `demo/` 이름 변경(`clean` → `realistic-app`), `docs/SPEC.md`·`test/demo-config.test.ts`의 이름 반영.
+- `feature/sun`, `main`: `99ee2e3`까지 push (시나리오 테스트, `demo/realistic-app` 이름 변경 포함).
+- 미커밋: `scan-meta.json`, `examples/out/`, 환경 덤프 증거 처리 수정, 이 문서.
+- (이전 기록) `demo/` 이름 변경(`clean` → `realistic-app`), `docs/SPEC.md`·`test/demo-config.test.ts`의 이름 반영.

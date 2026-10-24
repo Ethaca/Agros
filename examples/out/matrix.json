@@ -1,0 +1,982 @@
+{
+  "personas": [
+    "vendor1",
+    "vendor2",
+    "vendor3",
+    "anonymous"
+  ],
+  "resources": [
+    "dataset-read",
+    "dataset-search",
+    "dataset-tasks",
+    "task-read",
+    "vendor-profile",
+    "export",
+    "debug-env",
+    "health",
+    "products"
+  ],
+  "cells": [
+    {
+      "persona": "vendor1",
+      "resource": "dataset-read",
+      "target": "v1",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/datasets/1",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}"
+      }
+    },
+    {
+      "persona": "vendor1",
+      "resource": "dataset-read",
+      "target": "v2",
+      "expected": "deny",
+      "observed": "allow",
+      "verdict": "VULNERABLE",
+      "evidence": {
+        "request": "GET /api/datasets/2",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"id\":2,\"vendor_id\":\"v2\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}"
+      }
+    },
+    {
+      "persona": "vendor1",
+      "resource": "dataset-read",
+      "target": "v3",
+      "expected": "deny",
+      "observed": "allow",
+      "verdict": "VULNERABLE",
+      "evidence": {
+        "request": "GET /api/datasets/3",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"id\":3,\"vendor_id\":\"v3\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}"
+      }
+    },
+    {
+      "persona": "vendor1",
+      "resource": "dataset-search",
+      "target": "v1",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/datasets",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "[{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}]"
+      }
+    },
+    {
+      "persona": "vendor1",
+      "resource": "dataset-search",
+      "target": "v2",
+      "expected": "deny",
+      "observed": "deny",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/datasets",
+        "status": 200,
+        "note": "[{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}]"
+      }
+    },
+    {
+      "persona": "vendor1",
+      "resource": "dataset-search",
+      "target": "v3",
+      "expected": "deny",
+      "observed": "deny",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/datasets",
+        "status": 200,
+        "note": "[{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}]"
+      }
+    },
+    {
+      "persona": "vendor1",
+      "resource": "dataset-tasks",
+      "target": "v1",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/datasets/1/tasks",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "[{\"id\":1,\"dataset_id\":1,\"vendor_id\":\"v1\",\"title\":\"ARGOS_…\",\"instructions\":\"ARGOS_…\",\"status\":\"ARGOS_…\"}]"
+      }
+    },
+    {
+      "persona": "vendor1",
+      "resource": "dataset-tasks",
+      "target": "v2",
+      "expected": "deny",
+      "observed": "deny",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/datasets/2/tasks",
+        "status": 404,
+        "note": "{\"error\":\"not found\"}"
+      }
+    },
+    {
+      "persona": "vendor1",
+      "resource": "dataset-tasks",
+      "target": "v3",
+      "expected": "deny",
+      "observed": "deny",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/datasets/3/tasks",
+        "status": 404,
+        "note": "{\"error\":\"not found\"}"
+      }
+    },
+    {
+      "persona": "vendor1",
+      "resource": "task-read",
+      "target": "v1",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/tasks/1",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"id\":1,\"dataset_id\":1,\"vendor_id\":\"v1\",\"title\":\"ARGOS_…\",\"instructions\":\"ARGOS_…\",\"status\":\"ARGOS_…\"}"
+      }
+    },
+    {
+      "persona": "vendor1",
+      "resource": "task-read",
+      "target": "v2",
+      "expected": "deny",
+      "observed": "deny",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/tasks/2",
+        "status": 404,
+        "note": "{\"error\":\"not found\"}"
+      }
+    },
+    {
+      "persona": "vendor1",
+      "resource": "task-read",
+      "target": "v3",
+      "expected": "deny",
+      "observed": "deny",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/tasks/3",
+        "status": 404,
+        "note": "{\"error\":\"not found\"}"
+      }
+    },
+    {
+      "persona": "vendor1",
+      "resource": "vendor-profile",
+      "target": "v1",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/vendors/v1",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"id\":\"v1\",\"name\":\"ARGOS_…\",\"contact_email\":\"ARGOS_…\",\"api_key\":\"ARGOS_…\"}"
+      }
+    },
+    {
+      "persona": "vendor1",
+      "resource": "vendor-profile",
+      "target": "v2",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/vendors/v2",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"id\":\"v2\",\"name\":\"ARGOS_…\",\"contact_email\":\"ARGOS_…\",\"api_key\":\"ARGOS_…\"}"
+      }
+    },
+    {
+      "persona": "vendor1",
+      "resource": "vendor-profile",
+      "target": "v3",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/vendors/v3",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"id\":\"v3\",\"name\":\"ARGOS_…\",\"contact_email\":\"ARGOS_…\",\"api_key\":\"ARGOS_…\"}"
+      }
+    },
+    {
+      "persona": "vendor1",
+      "resource": "export",
+      "target": "v1",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "POST /api/export",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"datasets\":[{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\",\"tasks\":[{\"id\":1,\"dataset_id\":1,\"vendor"
+      }
+    },
+    {
+      "persona": "vendor1",
+      "resource": "export",
+      "target": "v2",
+      "expected": "deny",
+      "observed": "allow",
+      "verdict": "VULNERABLE",
+      "evidence": {
+        "request": "POST /api/export",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"datasets\":[{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\",\"tasks\":[{\"id\":1,\"dataset_id\":1,\"vendor"
+      }
+    },
+    {
+      "persona": "vendor1",
+      "resource": "export",
+      "target": "v3",
+      "expected": "deny",
+      "observed": "allow",
+      "verdict": "VULNERABLE",
+      "evidence": {
+        "request": "POST /api/export",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"datasets\":[{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\",\"tasks\":[{\"id\":1,\"dataset_id\":1,\"vendor"
+      }
+    },
+    {
+      "persona": "vendor1",
+      "resource": "debug-env",
+      "expected": "deny",
+      "observed": "allow",
+      "verdict": "VULNERABLE",
+      "evidence": {
+        "request": "GET /debug/env",
+        "status": 200,
+        "note": "body withheld: response contains the process environment"
+      }
+    },
+    {
+      "persona": "vendor1",
+      "resource": "health",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /health",
+        "status": 200,
+        "note": "{\"ok\":true}"
+      }
+    },
+    {
+      "persona": "vendor1",
+      "resource": "products",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/products",
+        "status": 200,
+        "note": "[]"
+      }
+    },
+    {
+      "persona": "vendor2",
+      "resource": "dataset-read",
+      "target": "v2",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/datasets/2",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"id\":2,\"vendor_id\":\"v2\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}"
+      }
+    },
+    {
+      "persona": "vendor2",
+      "resource": "dataset-read",
+      "target": "v1",
+      "expected": "deny",
+      "observed": "allow",
+      "verdict": "VULNERABLE",
+      "evidence": {
+        "request": "GET /api/datasets/1",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}"
+      }
+    },
+    {
+      "persona": "vendor2",
+      "resource": "dataset-read",
+      "target": "v3",
+      "expected": "deny",
+      "observed": "allow",
+      "verdict": "VULNERABLE",
+      "evidence": {
+        "request": "GET /api/datasets/3",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"id\":3,\"vendor_id\":\"v3\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}"
+      }
+    },
+    {
+      "persona": "vendor2",
+      "resource": "dataset-search",
+      "target": "v2",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/datasets",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "[{\"id\":2,\"vendor_id\":\"v2\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}]"
+      }
+    },
+    {
+      "persona": "vendor2",
+      "resource": "dataset-search",
+      "target": "v1",
+      "expected": "deny",
+      "observed": "deny",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/datasets",
+        "status": 200,
+        "note": "[{\"id\":2,\"vendor_id\":\"v2\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}]"
+      }
+    },
+    {
+      "persona": "vendor2",
+      "resource": "dataset-search",
+      "target": "v3",
+      "expected": "deny",
+      "observed": "deny",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/datasets",
+        "status": 200,
+        "note": "[{\"id\":2,\"vendor_id\":\"v2\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}]"
+      }
+    },
+    {
+      "persona": "vendor2",
+      "resource": "dataset-tasks",
+      "target": "v2",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/datasets/2/tasks",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "[{\"id\":2,\"dataset_id\":2,\"vendor_id\":\"v2\",\"title\":\"ARGOS_…\",\"instructions\":\"ARGOS_…\",\"status\":\"ARGOS_…\"}]"
+      }
+    },
+    {
+      "persona": "vendor2",
+      "resource": "dataset-tasks",
+      "target": "v1",
+      "expected": "deny",
+      "observed": "deny",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/datasets/1/tasks",
+        "status": 404,
+        "note": "{\"error\":\"not found\"}"
+      }
+    },
+    {
+      "persona": "vendor2",
+      "resource": "dataset-tasks",
+      "target": "v3",
+      "expected": "deny",
+      "observed": "deny",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/datasets/3/tasks",
+        "status": 404,
+        "note": "{\"error\":\"not found\"}"
+      }
+    },
+    {
+      "persona": "vendor2",
+      "resource": "task-read",
+      "target": "v2",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/tasks/2",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"id\":2,\"dataset_id\":2,\"vendor_id\":\"v2\",\"title\":\"ARGOS_…\",\"instructions\":\"ARGOS_…\",\"status\":\"ARGOS_…\"}"
+      }
+    },
+    {
+      "persona": "vendor2",
+      "resource": "task-read",
+      "target": "v1",
+      "expected": "deny",
+      "observed": "deny",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/tasks/1",
+        "status": 404,
+        "note": "{\"error\":\"not found\"}"
+      }
+    },
+    {
+      "persona": "vendor2",
+      "resource": "task-read",
+      "target": "v3",
+      "expected": "deny",
+      "observed": "deny",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/tasks/3",
+        "status": 404,
+        "note": "{\"error\":\"not found\"}"
+      }
+    },
+    {
+      "persona": "vendor2",
+      "resource": "vendor-profile",
+      "target": "v2",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/vendors/v2",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"id\":\"v2\",\"name\":\"ARGOS_…\",\"contact_email\":\"ARGOS_…\",\"api_key\":\"ARGOS_…\"}"
+      }
+    },
+    {
+      "persona": "vendor2",
+      "resource": "vendor-profile",
+      "target": "v1",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/vendors/v1",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"id\":\"v1\",\"name\":\"ARGOS_…\",\"contact_email\":\"ARGOS_…\",\"api_key\":\"ARGOS_…\"}"
+      }
+    },
+    {
+      "persona": "vendor2",
+      "resource": "vendor-profile",
+      "target": "v3",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/vendors/v3",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"id\":\"v3\",\"name\":\"ARGOS_…\",\"contact_email\":\"ARGOS_…\",\"api_key\":\"ARGOS_…\"}"
+      }
+    },
+    {
+      "persona": "vendor2",
+      "resource": "export",
+      "target": "v2",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "POST /api/export",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"datasets\":[{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\",\"tasks\":[{\"id\":1,\"dataset_id\":1,\"vendor"
+      }
+    },
+    {
+      "persona": "vendor2",
+      "resource": "export",
+      "target": "v1",
+      "expected": "deny",
+      "observed": "allow",
+      "verdict": "VULNERABLE",
+      "evidence": {
+        "request": "POST /api/export",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"datasets\":[{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\",\"tasks\":[{\"id\":1,\"dataset_id\":1,\"vendor"
+      }
+    },
+    {
+      "persona": "vendor2",
+      "resource": "export",
+      "target": "v3",
+      "expected": "deny",
+      "observed": "allow",
+      "verdict": "VULNERABLE",
+      "evidence": {
+        "request": "POST /api/export",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"datasets\":[{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\",\"tasks\":[{\"id\":1,\"dataset_id\":1,\"vendor"
+      }
+    },
+    {
+      "persona": "vendor2",
+      "resource": "debug-env",
+      "expected": "deny",
+      "observed": "allow",
+      "verdict": "VULNERABLE",
+      "evidence": {
+        "request": "GET /debug/env",
+        "status": 200,
+        "note": "body withheld: response contains the process environment"
+      }
+    },
+    {
+      "persona": "vendor2",
+      "resource": "health",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /health",
+        "status": 200,
+        "note": "{\"ok\":true}"
+      }
+    },
+    {
+      "persona": "vendor2",
+      "resource": "products",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/products",
+        "status": 200,
+        "note": "[]"
+      }
+    },
+    {
+      "persona": "vendor3",
+      "resource": "dataset-read",
+      "target": "v3",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/datasets/3",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"id\":3,\"vendor_id\":\"v3\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}"
+      }
+    },
+    {
+      "persona": "vendor3",
+      "resource": "dataset-read",
+      "target": "v1",
+      "expected": "deny",
+      "observed": "allow",
+      "verdict": "VULNERABLE",
+      "evidence": {
+        "request": "GET /api/datasets/1",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}"
+      }
+    },
+    {
+      "persona": "vendor3",
+      "resource": "dataset-read",
+      "target": "v2",
+      "expected": "deny",
+      "observed": "allow",
+      "verdict": "VULNERABLE",
+      "evidence": {
+        "request": "GET /api/datasets/2",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"id\":2,\"vendor_id\":\"v2\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}"
+      }
+    },
+    {
+      "persona": "vendor3",
+      "resource": "dataset-search",
+      "target": "v3",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/datasets",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "[{\"id\":3,\"vendor_id\":\"v3\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}]"
+      }
+    },
+    {
+      "persona": "vendor3",
+      "resource": "dataset-search",
+      "target": "v1",
+      "expected": "deny",
+      "observed": "deny",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/datasets",
+        "status": 200,
+        "note": "[{\"id\":3,\"vendor_id\":\"v3\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}]"
+      }
+    },
+    {
+      "persona": "vendor3",
+      "resource": "dataset-search",
+      "target": "v2",
+      "expected": "deny",
+      "observed": "deny",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/datasets",
+        "status": 200,
+        "note": "[{\"id\":3,\"vendor_id\":\"v3\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}]"
+      }
+    },
+    {
+      "persona": "vendor3",
+      "resource": "dataset-tasks",
+      "target": "v3",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/datasets/3/tasks",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "[{\"id\":3,\"dataset_id\":3,\"vendor_id\":\"v3\",\"title\":\"ARGOS_…\",\"instructions\":\"ARGOS_…\",\"status\":\"ARGOS_…\"}]"
+      }
+    },
+    {
+      "persona": "vendor3",
+      "resource": "dataset-tasks",
+      "target": "v1",
+      "expected": "deny",
+      "observed": "deny",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/datasets/1/tasks",
+        "status": 404,
+        "note": "{\"error\":\"not found\"}"
+      }
+    },
+    {
+      "persona": "vendor3",
+      "resource": "dataset-tasks",
+      "target": "v2",
+      "expected": "deny",
+      "observed": "deny",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/datasets/2/tasks",
+        "status": 404,
+        "note": "{\"error\":\"not found\"}"
+      }
+    },
+    {
+      "persona": "vendor3",
+      "resource": "task-read",
+      "target": "v3",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/tasks/3",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"id\":3,\"dataset_id\":3,\"vendor_id\":\"v3\",\"title\":\"ARGOS_…\",\"instructions\":\"ARGOS_…\",\"status\":\"ARGOS_…\"}"
+      }
+    },
+    {
+      "persona": "vendor3",
+      "resource": "task-read",
+      "target": "v1",
+      "expected": "deny",
+      "observed": "deny",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/tasks/1",
+        "status": 404,
+        "note": "{\"error\":\"not found\"}"
+      }
+    },
+    {
+      "persona": "vendor3",
+      "resource": "task-read",
+      "target": "v2",
+      "expected": "deny",
+      "observed": "deny",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/tasks/2",
+        "status": 404,
+        "note": "{\"error\":\"not found\"}"
+      }
+    },
+    {
+      "persona": "vendor3",
+      "resource": "vendor-profile",
+      "target": "v3",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/vendors/v3",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"id\":\"v3\",\"name\":\"ARGOS_…\",\"contact_email\":\"ARGOS_…\",\"api_key\":\"ARGOS_…\"}"
+      }
+    },
+    {
+      "persona": "vendor3",
+      "resource": "vendor-profile",
+      "target": "v1",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/vendors/v1",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"id\":\"v1\",\"name\":\"ARGOS_…\",\"contact_email\":\"ARGOS_…\",\"api_key\":\"ARGOS_…\"}"
+      }
+    },
+    {
+      "persona": "vendor3",
+      "resource": "vendor-profile",
+      "target": "v2",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/vendors/v2",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"id\":\"v2\",\"name\":\"ARGOS_…\",\"contact_email\":\"ARGOS_…\",\"api_key\":\"ARGOS_…\"}"
+      }
+    },
+    {
+      "persona": "vendor3",
+      "resource": "export",
+      "target": "v3",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "POST /api/export",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"datasets\":[{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\",\"tasks\":[{\"id\":1,\"dataset_id\":1,\"vendor"
+      }
+    },
+    {
+      "persona": "vendor3",
+      "resource": "export",
+      "target": "v1",
+      "expected": "deny",
+      "observed": "allow",
+      "verdict": "VULNERABLE",
+      "evidence": {
+        "request": "POST /api/export",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"datasets\":[{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\",\"tasks\":[{\"id\":1,\"dataset_id\":1,\"vendor"
+      }
+    },
+    {
+      "persona": "vendor3",
+      "resource": "export",
+      "target": "v2",
+      "expected": "deny",
+      "observed": "allow",
+      "verdict": "VULNERABLE",
+      "evidence": {
+        "request": "POST /api/export",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"datasets\":[{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\",\"tasks\":[{\"id\":1,\"dataset_id\":1,\"vendor"
+      }
+    },
+    {
+      "persona": "vendor3",
+      "resource": "debug-env",
+      "expected": "deny",
+      "observed": "allow",
+      "verdict": "VULNERABLE",
+      "evidence": {
+        "request": "GET /debug/env",
+        "status": 200,
+        "note": "body withheld: response contains the process environment"
+      }
+    },
+    {
+      "persona": "vendor3",
+      "resource": "health",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /health",
+        "status": 200,
+        "note": "{\"ok\":true}"
+      }
+    },
+    {
+      "persona": "vendor3",
+      "resource": "products",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/products",
+        "status": 200,
+        "note": "[]"
+      }
+    },
+    {
+      "persona": "anonymous",
+      "resource": "dataset-read",
+      "target": "v1",
+      "expected": "deny",
+      "observed": "deny",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/datasets/1",
+        "status": 401,
+        "note": "{\"error\":\"unauthorized\"}"
+      }
+    },
+    {
+      "persona": "anonymous",
+      "resource": "dataset-search",
+      "target": "v1",
+      "expected": "deny",
+      "observed": "deny",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/datasets",
+        "status": 401,
+        "note": "{\"error\":\"unauthorized\"}"
+      }
+    },
+    {
+      "persona": "anonymous",
+      "resource": "dataset-tasks",
+      "target": "v1",
+      "expected": "deny",
+      "observed": "deny",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/datasets/1/tasks",
+        "status": 401,
+        "note": "{\"error\":\"unauthorized\"}"
+      }
+    },
+    {
+      "persona": "anonymous",
+      "resource": "task-read",
+      "target": "v1",
+      "expected": "deny",
+      "observed": "deny",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/tasks/1",
+        "status": 401,
+        "note": "{\"error\":\"unauthorized\"}"
+      }
+    },
+    {
+      "persona": "anonymous",
+      "resource": "vendor-profile",
+      "target": "v1",
+      "expected": "deny",
+      "observed": "deny",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/vendors/v1",
+        "status": 401,
+        "note": "{\"error\":\"unauthorized\"}"
+      }
+    },
+    {
+      "persona": "anonymous",
+      "resource": "export",
+      "target": "v1",
+      "expected": "deny",
+      "observed": "allow",
+      "verdict": "VULNERABLE",
+      "evidence": {
+        "request": "POST /api/export",
+        "status": 200,
+        "marker": "ARGOS_",
+        "note": "{\"datasets\":[{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\",\"tasks\":[{\"id\":1,\"dataset_id\":1,\"vendor"
+      }
+    },
+    {
+      "persona": "anonymous",
+      "resource": "debug-env",
+      "expected": "deny",
+      "observed": "allow",
+      "verdict": "VULNERABLE",
+      "evidence": {
+        "request": "GET /debug/env",
+        "status": 200,
+        "note": "body withheld: response contains the process environment"
+      }
+    },
+    {
+      "persona": "anonymous",
+      "resource": "health",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /health",
+        "status": 200,
+        "note": "{\"ok\":true}"
+      }
+    },
+    {
+      "persona": "anonymous",
+      "resource": "products",
+      "expected": "allow",
+      "observed": "allow",
+      "verdict": "OK",
+      "evidence": {
+        "request": "GET /api/products",
+        "status": 200,
+        "note": "[]"
+      }
+    }
+  ]
+}

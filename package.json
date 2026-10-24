@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test --test-timeout=60000 test/*.test.ts && node --import tsx --test --test-timeout=180000 test/scenarios/*.test.ts",
     "test:unit": "node --import tsx --test --test-timeout=60000 test/*.test.ts",
-    "test:scenarios": "node --import tsx --test --test-timeout=180000 test/scenarios/*.test.ts"
+    "test:scenarios": "node --import tsx --test --test-timeout=180000 test/scenarios/*.test.ts",
+    "examples:update": "tsx src/cli.ts scan --config demo/vendor-platform/argos.config.yaml --out examples/out"
   },
   "engines": {
     "node": ">=22"

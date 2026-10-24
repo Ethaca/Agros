@@ -55,3 +55,41 @@ export const Finding = z.strictObject({
   env: z.string().optional(),
 });
 export type Finding = z.infer<typeof Finding>;
+
+const Sha256 = z.string().regex(/^[0-9a-f]{64}$/);
+
+/**
+ * out/scan-meta.json: raw material for the report's evidence header (SPEC V2).
+ * Hashes pin files, they do not prevent tampering. No absolute paths, no secrets.
+ */
+export const ScanMeta = z.strictObject({
+  tool: z.strictObject({ name: z.literal("argos"), version: z.string() }),
+  startedAt: z.string(),
+  finishedAt: z.string(),
+  durationMs: z.number().int().nonnegative(),
+  /** Name of the directory holding the config (identifies the target in a report). */
+  target: z.string(),
+  mode: z.enum(["report", "block"]),
+  config: z.strictObject({ file: z.string(), sha256: Sha256 }),
+  /** Source files the DB was seeded from. rows is null until seed.rows is supported. */
+  seed: z
+    .strictObject({
+      schema: z.strictObject({ file: z.string(), sha256: Sha256 }),
+      rows: z.null(),
+    })
+    .nullable(),
+  checks: z.array(CheckName),
+  personas: z.array(z.strictObject({ name: z.string(), org: z.string().nullable() })),
+  /** Everything that was tested: a route not listed here was not tested (blackbox scope). */
+  resources: z.array(z.strictObject({ id: z.string(), route: z.string(), public: z.boolean() })),
+  results: z.strictObject({
+    cells: z.number().int(),
+    findings: z.number().int(),
+    counts: z.strictObject({ VULNERABLE: z.number().int(), SUSPECTED: z.number().int(), OK: z.number().int(), SKIPPED: z.number().int() }),
+  }),
+  files: z.strictObject({
+    matrix: z.strictObject({ file: z.literal("matrix.json"), sha256: Sha256 }),
+    findings: z.strictObject({ file: z.literal("findings.json"), sha256: Sha256 }),
+  }),
+});
+export type ScanMeta = z.infer<typeof ScanMeta>;

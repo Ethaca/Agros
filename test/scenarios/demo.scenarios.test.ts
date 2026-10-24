@@ -6,6 +6,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import {
   APPS, ROOT, cli, copyApp, hasCurl, isRed, manualExploit, pristineScan, readAll, redOn, scan, scanConfig, skipReason, variantConfig,
@@ -169,6 +170,7 @@ describe("demo scenarios", { skip }, () => {
       ["secret marker", /ARGOS_SECRET_\d+_[0-9a-f]{6}/],
       ["env canary", /ARGOS_ENV_[A-Z0-9_]+_[0-9a-f]{6}/],
       ["owner marker", /ARGOS_[A-Za-z0-9-]+_v\d_[0-9a-f]{6}/],
+      ["host home path", new RegExp(homedir().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))],
     ];
     it("scan files and terminal output", () => {
       for (const app of APPS) {
@@ -183,6 +185,17 @@ describe("demo scenarios", { skip }, () => {
       const r = cli(["fix", "--config", join(dir, "argos.config.yaml"), "--out", out]);
       const all = readAll(out) + r.stdout + r.stderr;
       for (const [name, re] of LEAKS) assert.ok(!re.test(all), `fix: ${name} leaked`);
+    });
+  });
+
+  describe("S12 examples/out stay current", () => {
+    it("a fresh scan of vendor-platform reproduces examples/out (times aside)", () => {
+      const r = pristineScan("vendor-platform");
+      const read = (dir: string, f: string) => readFileSync(join(dir, f), "utf8");
+      assert.equal(read(r.out, "matrix.json"), read(join(ROOT, "examples", "out"), "matrix.json"), "matrix.json: run `pnpm run examples:update`");
+      assert.equal(read(r.out, "findings.json"), read(join(ROOT, "examples", "out"), "findings.json"), "findings.json: run `pnpm run examples:update`");
+      const strip = (t: string) => { const m = JSON.parse(t); delete m.startedAt; delete m.finishedAt; delete m.durationMs; return m; };
+      assert.deepEqual(strip(read(r.out, "scan-meta.json")), strip(read(join(ROOT, "examples", "out"), "scan-meta.json")), "scan-meta.json: run `pnpm run examples:update`");
     });
   });
 

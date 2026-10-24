@@ -6,6 +6,7 @@ import { observe, verdictFor, runMatrix, renderMatrixMarkdown } from "../src/mat
 import { allMarkers } from "../src/seed.js";
 import { Matrix } from "../src/types.js";
 
+import { parseConfig } from "../src/config.js";
 import { app, cfg, manifest, M1 } from "./helpers/fake-app.js";
 
 test("observe: SPEC 6.4 rules", () => {
@@ -119,4 +120,30 @@ test("sendAs reports connection errors instead of throwing", async () => {
   const r = await sendAs("http://127.0.0.1:1", { name: "a", auth: { type: "none" } }, "GET", "/x", { timeoutMs: 300 });
   assert.equal(r.status, null);
   assert.ok(r.error);
+});
+
+test("evidence withholds the body of a response that dumps the environment", async () => {
+  const { createServer } = await import("node:http");
+  const canary = "ARGOS_ENV_JWT_SECRET_abcdef";
+  const srv = createServer((_req, res) => void res.end(JSON.stringify({ PATH: "/Users/someone/bin", JWT_SECRET: canary })));
+  await new Promise<void>((ok) => srv.listen(0, "127.0.0.1", ok));
+  try {
+    const c = parseConfig({
+      version: 1, target: { start: "x" },
+      personas: [
+        { name: "a", org: "o1", auth: { type: "bearer", token: "t1" } },
+        { name: "b", org: "o2", auth: { type: "bearer", token: "t2" } },
+        { name: "anon", auth: { type: "none" } },
+      ],
+      resources: [{ id: "debug-env", route: "GET /debug/env", expect: { owner: "deny", other: "deny", anonymous: "deny" } }],
+      checks: ["unauth"],
+    });
+    const m = await runMatrix(c, `http://127.0.0.1:${(srv.address() as AddressInfo).port}`, { markers: {}, secrets: [], ids: {}, envCanaries: [{ name: "JWT_SECRET", marker: canary }] });
+    const dump = JSON.stringify(m);
+    assert.ok(!dump.includes("/Users/someone"), "host path must not reach the matrix");
+    assert.ok(!dump.includes(canary));
+    assert.match(m.cells[0]!.evidence.note!, /body withheld/);
+  } finally {
+    srv.close();
+  }
 });

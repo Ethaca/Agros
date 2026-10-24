@@ -1,0 +1,113 @@
+{
+  "tool": {
+    "name": "argos",
+    "version": "0.0.0"
+  },
+  "startedAt": "2026-10-24T04:34:44.823Z",
+  "finishedAt": "2026-10-24T04:34:45.250Z",
+  "durationMs": 427,
+  "target": "vendor-platform",
+  "mode": "report",
+  "config": {
+    "file": "argos.config.yaml",
+    "sha256": "bf7a70a11aeddc096b4e54db1b631278635c80eb778b3997a05e4228a098cc79"
+  },
+  "seed": {
+    "schema": {
+      "file": "schema.sql",
+      "sha256": "a8f55ad7c4b6466711249bc8ac77ab96cc16f9635e8953452cccd11dc7080dd8"
+    },
+    "rows": null
+  },
+  "checks": [
+    "bola",
+    "unauth",
+    "sqli",
+    "secrets"
+  ],
+  "personas": [
+    {
+      "name": "vendor1",
+      "org": "v1"
+    },
+    {
+      "name": "vendor2",
+      "org": "v2"
+    },
+    {
+      "name": "vendor3",
+      "org": "v3"
+    },
+    {
+      "name": "anonymous",
+      "org": null
+    }
+  ],
+  "resources": [
+    {
+      "id": "dataset-read",
+      "route": "GET /api/datasets/:id",
+      "public": false
+    },
+    {
+      "id": "dataset-search",
+      "route": "GET /api/datasets?search=",
+      "public": false
+    },
+    {
+      "id": "dataset-tasks",
+      "route": "GET /api/datasets/:id/tasks",
+      "public": false
+    },
+    {
+      "id": "task-read",
+      "route": "GET /api/tasks/:id",
+      "public": false
+    },
+    {
+      "id": "vendor-profile",
+      "route": "GET /api/vendors/:id",
+      "public": false
+    },
+    {
+      "id": "export",
+      "route": "POST /api/export",
+      "public": false
+    },
+    {
+      "id": "debug-env",
+      "route": "GET /debug/env",
+      "public": false
+    },
+    {
+      "id": "health",
+      "route": "GET /health",
+      "public": true
+    },
+    {
+      "id": "products",
+      "route": "GET /api/products",
+      "public": true
+    }
+  ],
+  "results": {
+    "cells": 72,
+    "findings": 65,
+    "counts": {
+      "VULNERABLE": 25,
+      "SUSPECTED": 3,
+      "OK": 37,
+      "SKIPPED": 0
+    }
+  },
+  "files": {
+    "matrix": {
+      "file": "matrix.json",
+      "sha256": "8f9547c73d02c1df98e9a776daee11f33d809baece46f8514608dd145ba17233"
+    },
+    "findings": {
+      "file": "findings.json",
+      "sha256": "4afaa72d8039dfaa81687190bcec1e12670a932a5af230b298806b4201583fa4"
+    }
+  }
+}

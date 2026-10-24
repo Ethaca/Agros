@@ -156,7 +156,9 @@ function evidenceFor(res: HttpResult, markers: string[] | undefined, manifest: S
   if (res.status !== null) ev.status = res.status;
   const hit = markers?.find((m) => res.body.includes(m));
   if (hit !== undefined) ev.marker = maskMarker(hit);
-  const note = res.error ?? redact(res.body.slice(0, 160), manifest);
+  // A response carrying an env canary is an environment dump: never echo any of it (it holds host PATH/HOME etc.).
+  const dumpsEnv = (manifest.envCanaries ?? []).some((k) => res.body.includes(k.marker));
+  const note = res.error ?? (dumpsEnv ? "body withheld: response contains the process environment" : redact(res.body.slice(0, 160), manifest));
   if (note) ev.note = note;
   return ev;
 }
