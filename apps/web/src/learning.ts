@@ -1,3 +1,4 @@
+import { DEFAULT_LANG, type Lang } from './i18n.ts';
 import type { Category } from './types.ts';
 
 export interface LearningGuide {
@@ -96,7 +97,97 @@ const GUIDES: Record<Category, LearningGuide> = {
   },
 };
 
-export const learningGuide = (category: Category): LearningGuide => Object.hasOwn(GUIDES, category) ? GUIDES[category] : GUIDES.API8;
+const GUIDES_EN: Record<Category, LearningGuide> = {
+  API1: {
+    concept: 'Authentication checks "who are you"; object authorization checks "may you access this data". A logged-in user still must not reach someone else\'s data.',
+    misconception: 'It is easy to assume that a login middleware or UUID IDs also solve ownership checks. How hard an ID is to guess has nothing to do with access rights.',
+    question: 'A and B are both logged in. What should happen when B sends a request with A\'s order ID?',
+    answer: 'If the order is not shared by policy, no data should be returned or changed. The server must check the relationship between the authenticated user/tenant and the object.',
+    checks: ['Confirm the user identifier comes from the verified session, not the body', 'Apply the ownership condition to updates and deletes, not just reads', 'Test both an owner request that succeeds and another user\'s request that is denied'],
+  },
+  API2: {
+    concept: 'Reading a token is different from verifying that it can be trusted. Only after checking the signature, expiry, issuer and other required conditions can it be used for authentication.',
+    misconception: 'When AI-generated code gets user info back from jwt.decode(), it is easy to think authentication is done. Decoding is not signature verification.',
+    question: 'If you can read a JWT\'s contents, can you trust the userId inside it right away?',
+    answer: 'No. Verify the signature with a trusted key and allowed algorithms, check expiry and other required conditions, and only then use it.',
+    checks: ['Check the authentication middleware above the router as well', 'Test that tampered, expired and missing tokens are rejected', 'Confirm requests with a valid token still succeed'],
+  },
+  API3: {
+    concept: 'Permission to access an object does not mean permission to read or modify every field. Limit input fields and response fields separately.',
+    misconception: 'It is easy to think users cannot send a role field because the frontend form has none. Clients can craft requests directly.',
+    question: 'How should a profile update API handle an unexpected role field added to the request?',
+    answer: 'The server must explicitly select only the fields a regular user may change. Permission fields such as role belong to a separately authorized flow.',
+    checks: ['Confirm the whole req.body is not passed to the DB', 'Include only the needed fields in the response DTO', 'Check that an added forbidden field is neither stored nor exposed in the response'],
+  },
+  API4: {
+    concept: 'Even legitimate requests can drain server resources and external API budgets if their count, size or run time is unlimited.',
+    misconception: 'Having pagination or a login does not by itself limit resource use. The server must also set the maximum for limit.',
+    question: 'If a client requests limit=1000000, should the server use that value as-is?',
+    answer: 'Apply an upper bound that fits the service or reject the request. Per-user rate limits and timeouts need separate consideration.',
+    checks: ['Set upper bounds on input size, page size and run time', 'Check per-user call limits on sensitive operations', 'In an isolated test, check boundary values and the over-limit response'],
+  },
+  API5: {
+    concept: 'Function-level authorization means the server checks whether this user may perform a specific action, such as an admin task.',
+    misconception: 'Hiding the admin button or checking an x-role: admin header does not protect a permission. Users can change headers.',
+    question: 'If a regular user knows an admin API path and calls it directly, what should stop them?',
+    answer: 'Function-level authorization based on server-managed roles and permissions. Whether the UI shows a button, or what role the client claims, is not evidence.',
+    checks: ['Confirm the role comes from the server or a verified claim', 'Apply the role check to every privileged endpoint', 'Test admin success and regular-user denial'],
+  },
+  API6: {
+    concept: 'Even when each request is valid, repeating or running business flows such as bookings, coupons or purchases concurrently can abuse business rules.',
+    misconception: 'It is easy to think a well-formed request from a logged-in user is also safe from a business point of view.',
+    question: 'If the same user redeems a single-use coupon twice at the same time, may it be applied twice?',
+    answer: 'No. Depending on policy, use atomic state changes, duplicate prevention and usage limits so it applies only once.',
+    checks: ['Define business limits on repeated and concurrent execution', 'Check duplicate prevention and transaction boundaries', 'Check the result of duplicate requests in an isolated environment'],
+  },
+  API7: {
+    concept: 'When the server fetches a user\'s URL, the user borrows the server\'s network access instead of their own browser\'s.',
+    misconception: 'It is easy to think a URL is safe if it starts with https or is syntactically valid. The destination IP and redirects are separate problems.',
+    question: 'If an allowed URL redirects to an internal address, is checking only the first URL enough?',
+    answer: 'No. Restrict the final destination, every redirect and the DNS resolution result according to policy. Where possible, request only allowed destinations.',
+    checks: ['Specify allowed domains and protocols', 'Restrict private, loopback and link-local addresses and redirects', 'Test the blocking policy against a mock destination instead of the real internal network'],
+  },
+  API8: {
+    concept: 'Settings such as debug mode, error responses and CORS also decide what is exposed externally and what browsers may access.',
+    misconception: 'The claim that allowing all CORS origins always bypasses authentication is also wrong. Origin, cookie and credential settings must be read together with browser behavior.',
+    question: 'If you set CORS restrictions, are unauthorized requests sent from outside a browser blocked too?',
+    answer: 'No. CORS does not replace authentication or authorization. Server-side access control must stay in place separately.',
+    checks: ['Keep debug mode and detailed errors private in production settings', 'Check allowed origins together with the credential policy', 'Verify error responses and real browser access separately'],
+  },
+  API9: {
+    concept: 'Old versions and debug APIs are attack surface that needs protection and management whenever they are deployed and reachable.',
+    misconception: 'It is easy to think an endpoint becomes unusable once its link is removed from the UI.',
+    question: 'Can a /v0 API the frontend no longer uses stay on the server as-is?',
+    answer: 'Check whether it is reachable regardless of use. Remove it, or bring it under the same protection and inventory management as the current API.',
+    checks: ['Compare the deployed route list with the managed inventory', 'Check protection on old-version and debug routes', 'Confirm they are removed or denied in production builds'],
+  },
+  API10: {
+    concept: 'Responses from external APIs are also input crossing a trust boundary. Verify the peer and the data format.',
+    misconception: 'It is easy to think responses from a familiar service, or over HTTPS, need no validation. Turning off certificate verification means the peer is not verified.',
+    question: 'Is switching to verify=false the right way to get past a certificate error?',
+    answer: 'No. Fix the certificate chain and trust settings. If needed, configure trust for the specific private CA.',
+    checks: ['Keep TLS certificate verification on', 'Limit schema, size and timeout of external responses', 'Check handling of malformed responses from a mock external API'],
+  },
+  INJECTION: {
+    concept: 'Once input is interpreted as part of a query or command structure, a user can change behavior that was never allowed.',
+    misconception: 'AI-generated string-building code working fine on normal input does not make the query safe.',
+    question: 'Can removing quotes from user input alone make a query safe?',
+    answer: 'Instead of ad hoc input cleanup, separate data from query structure with bound parameters. NoSQL filters also need restricted fields and types.',
+    checks: ['Use bound parameters for queries', 'Restrict filter fields, types and operators', 'Confirm special characters are treated as data in an isolated DB'],
+  },
+  SECRETS: {
+    concept: 'Putting a key in code can leak the permission itself through the repository, logs and history.',
+    misconception: 'It is easy to think a leaked key is safe once the line is deleted or the repository is made private.',
+    question: 'If a key included in a commit is removed in the next commit, is the issue resolved?',
+    answer: 'No. If it was a real credential, revoke and reissue it and review its usage history. Inject the new key from a secret store.',
+    checks: ['After confirming it is a real key, revoke and replace the exposed key', 'Do not leave credentials in code, logs or examples', 'Confirm the old key fails and the new key has least privilege'],
+  },
+};
+
+export function learningGuide(category: Category, lang: Lang = DEFAULT_LANG): LearningGuide {
+  const guides = lang === 'ko' ? GUIDES : GUIDES_EN;
+  return Object.hasOwn(guides, category) ? guides[category] : guides.API8;
+}
 
 export function learningSource(category: Category): string {
   if (category === 'SECRETS') return 'https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html';
@@ -104,6 +195,10 @@ export function learningSource(category: Category): string {
   return 'https://api-security.owasp.org/editions/2023/en/0x11-t10/';
 }
 
-export function reviewPrompt(category: Category): string {
-  return `이 변경의 ${category} 보안을 검토해 주세요. ${learningGuide(category).checks.join('. ')}. 각 판단의 코드 위치와 근거를 보여주고, 확인할 수 없는 부분은 가정으로 구분해 주세요. 테스트 코드를 제안하되 실제로 실행하지 않은 결과를 통과했다고 표현하지 마세요.`;
+export function reviewPrompt(category: Category, lang: Lang = DEFAULT_LANG): string {
+  const checks = learningGuide(category, lang).checks.join('. ');
+  if (lang === 'ko') {
+    return `이 변경의 ${category} 보안을 검토해 주세요. ${checks}. 각 판단의 코드 위치와 근거를 보여주고, 확인할 수 없는 부분은 가정으로 구분해 주세요. 테스트 코드를 제안하되 실제로 실행하지 않은 결과를 통과했다고 표현하지 마세요.`;
+  }
+  return `Please review this change for ${category} security. ${checks}. Show the code location and evidence for each judgment, and mark anything you cannot confirm as an assumption. Suggest test code, but do not describe results you did not actually run as passing.`;
 }

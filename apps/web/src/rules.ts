@@ -1,4 +1,5 @@
 import { parsePatch, type ChangedFile, type DiffLine } from './diff.ts';
+import { DEFAULT_LANG, type Lang } from './i18n.ts';
 import type { Category, Finding, Severity } from './types.ts';
 
 /**
@@ -12,6 +13,8 @@ export interface Rule {
   title: string;
   description: string;
   recommendation: string;
+  /** 영어 문구. 리포트 언어가 'ko' 이면 위의 한국어 필드를 쓴다 */
+  en: { title: string; description: string; recommendation: string };
   pattern: RegExp;
   /** 'removed' 면 삭제된 라인을 본다 (인증/레이트리밋 제거 탐지) */
   target?: 'added' | 'removed';
@@ -39,6 +42,11 @@ export const RULES: Rule[] = [
     title: '요청 파라미터의 ID 로 객체를 직접 조회/수정',
     description: '클라이언트가 보낸 ID 로 DB 객체를 조회·수정·삭제하면서 현재 사용자의 소유권(owner/tenant) 조건이 보이지 않습니다. 다른 사용자의 ID 를 넣으면 남의 데이터에 접근할 수 있습니다 (BOLA/IDOR).',
     recommendation: '조회 조건에 `ownerId: req.user.id` (또는 tenantId) 를 함께 걸거나, 조회 후 소유권을 검증하고 실패 시 404/403 을 반환하세요.',
+    en: {
+      title: "Object fetched or modified directly by an ID from request parameters",
+      description: "A DB object is read, updated or deleted using a client-supplied ID, with no visible ownership (owner/tenant) condition for the current user. Supplying another user's ID may expose their data (BOLA/IDOR).",
+      recommendation: "Add `ownerId: req.user.id` (or tenantId) to the lookup condition, or verify ownership after the lookup and return 404/403 on failure.",
+    },
     pattern: new RegExp(String.raw`\b(?:find\w*|get(?:ById)?|get_object_or_404|objects\.(?:get|filter)|delete\w*|update\w*|destroy|remove|select|query)\s*\(.*` + REQ, 'i'),
     unless: OWNERSHIP,
     window: 8,
@@ -51,6 +59,11 @@ export const RULES: Rule[] = [
     title: '객체 ID 를 받는 신규 엔드포인트에 소유권 검증 흔적 없음',
     description: '경로에 객체 식별자(`:id`, `{id}`, `<int:pk>` 등)를 받는 라우트가 추가되었지만 근처에 소유권/권한 체크가 보이지 않습니다.',
     recommendation: '핸들러에서 리소스의 소유자와 인증된 사용자가 일치하는지 검증하세요. 정책 미들웨어(예: `authorizeResource`)로 일괄 적용하는 것을 권장합니다.',
+    en: {
+      title: "New endpoint takes an object ID with no sign of an ownership check",
+      description: "A route that accepts an object identifier in its path (`:id`, `{id}`, `<int:pk>`, etc.) was added, but no ownership or permission check is visible nearby.",
+      recommendation: "Verify in the handler that the resource owner matches the authenticated user. Applying a policy middleware (e.g. `authorizeResource`) across routes is recommended.",
+    },
     pattern: /(\.(get|put|patch|delete)\s*\(\s*['"`][^'"`]*\/:\w*(id|Id|ID)\b|@(Get|Put|Patch|Delete)Mapping\([^)]*\{\w*[iI]d\}|@(app|router|api)\.(get|put|patch|delete)\([^)]*\{\w*id\}|path\(\s*['"][^'"]*<(int:|uuid:)?\w*(id|pk)>)/,
     unless: OWNERSHIP,
     window: 15,
@@ -63,6 +76,11 @@ export const RULES: Rule[] = [
     title: '사용자 식별자를 클라이언트 입력에서 가져옴',
     description: '`userId`/`ownerId` 같은 주체 식별자를 body·query·header 에서 읽고 있습니다. 인증 토큰이 아닌 클라이언트 값을 믿으면 다른 사용자로 행세할 수 있습니다.',
     recommendation: '주체 식별자는 검증된 세션/토큰(`req.user.id`)에서만 가져오세요.',
+    en: {
+      title: "User identifier taken from client input",
+      description: "A principal identifier such as `userId`/`ownerId` is read from the body, query or headers. Trusting a client value instead of the auth token lets callers act as other users.",
+      recommendation: "Take principal identifiers only from the verified session/token (`req.user.id`).",
+    },
     pattern: /\b(req|request|ctx\.request)\.(body|query|headers|params)\.?\[?['"]?(user_?id|userId|owner_?id|ownerId|account_?id|accountId|x-user-id)\b/i,
   },
   {
@@ -72,6 +90,11 @@ export const RULES: Rule[] = [
     title: '관리자/내부용 라우트에 역할 검사 없음',
     description: '`/admin`, `/internal`, `/debug` 등 특권 기능 라우트가 추가되었지만 역할(role) 기반 인가 체크가 보이지 않습니다.',
     recommendation: '`requireRole("admin")`, `@PreAuthorize("hasRole(\'ADMIN\')")`, `Depends(require_admin)` 같은 함수 수준 인가를 적용하세요.',
+    en: {
+      title: "Admin/internal route without a role check",
+      description: "A privileged route such as `/admin`, `/internal` or `/debug` was added, but no role-based authorization check is visible.",
+      recommendation: "Apply function-level authorization such as `requireRole(\"admin\")`, `@PreAuthorize(\"hasRole('ADMIN')\")` or `Depends(require_admin)`.",
+    },
     pattern: new RegExp(ROUTE.slice(0, -1) + String.raw`)[^)]*\/(?:admin|internal|debug|manage|ops)\b`, 'i'),
     unless: /(isAdmin|requireAdmin|require_admin|admin_required|requireRole|hasRole|hasAuthority|roles?\b|authorize|permission|@PreAuthorize|@Secured|@RolesAllowed|@UseGuards|staff_member_required|superuser)/i,
     window: 4,
@@ -83,6 +106,11 @@ export const RULES: Rule[] = [
     title: '권한/역할 값을 클라이언트 입력에서 신뢰',
     description: '`role`, `isAdmin`, `permissions` 등을 요청 body/query/header 에서 읽고 있습니다. 공격자가 자신의 권한을 올릴 수 있습니다.',
     recommendation: '권한 정보는 서버 측 사용자 레코드나 검증된 토큰 클레임에서만 가져오세요.',
+    en: {
+      title: "Permission/role value trusted from client input",
+      description: "`role`, `isAdmin`, `permissions` or similar are read from the request body/query/headers. An attacker can raise their own privileges.",
+      recommendation: "Take permission data only from the server-side user record or verified token claims.",
+    },
     pattern: /\b(req|request|ctx\.request)\.(body|query|headers|json|data|form)\.?\[?['"]?(role|roles|is_?admin|isAdmin|admin|permissions?|x-role|x-admin)\b/i,
   },
   {
@@ -92,6 +120,11 @@ export const RULES: Rule[] = [
     title: '인증/인가 미들웨어가 제거됨',
     description: '이 PR 에서 인증·인가 미들웨어/데코레이터가 삭제되었습니다. 해당 엔드포인트가 비인증 상태로 노출될 수 있습니다.',
     recommendation: '의도된 변경인지 확인하고, 다른 위치(라우터 레벨 등)에서 동일한 보호가 적용되는지 검증하세요.',
+    en: {
+      title: "Authentication/authorization middleware removed",
+      description: "This PR deletes an authentication or authorization middleware/decorator. The affected endpoint may now be exposed without authentication.",
+      recommendation: "Confirm the change is intended and verify the same protection is applied elsewhere (e.g. at the router level).",
+    },
     target: 'removed',
     pattern: /(authenticate\w*|requireAuth|isAuthenticated|ensureAuth\w*|ensureLoggedIn|verifyToken|authMiddleware|passport\.authenticate|checkJwt|jwtAuth|@login_required|@permission_required|@PreAuthorize|@Secured|@RolesAllowed|@UseGuards|@Authorized|Depends\(\s*get_current_\w+|before_action\s+:authenticate\w*|requireRole|authorize\w*)/,
   },
@@ -102,6 +135,11 @@ export const RULES: Rule[] = [
     title: '레이트 리밋/스로틀링이 제거됨',
     description: '요청 횟수 제한 로직이 삭제되었습니다. 브루트포스나 리소스 고갈 공격에 노출될 수 있습니다.',
     recommendation: '엔드포인트별 레이트 리밋(특히 로그인, OTP, 결제 등 민감 흐름)을 유지하세요.',
+    en: {
+      title: "Rate limiting/throttling removed",
+      description: "Request rate-limiting logic was deleted. The endpoint may be exposed to brute-force or resource-exhaustion attacks.",
+      recommendation: "Keep per-endpoint rate limits, especially on sensitive flows such as login, OTP and payments.",
+    },
     target: 'removed',
     pattern: /(rateLimit\w*|RateLimit\w*|rate_limit\w*|[tT]hrottle\w*|limiter|slowDown)/,
   },
@@ -112,6 +150,11 @@ export const RULES: Rule[] = [
     title: '요청 body 전체를 모델에 바인딩 (Mass Assignment)',
     description: '요청 body 를 필드 선별 없이 그대로 생성/수정에 사용합니다. `role`, `isAdmin`, `balance`, `ownerId` 같은 민감 속성을 클라이언트가 덮어쓸 수 있습니다.',
     recommendation: '허용 필드만 명시적으로 골라내세요 (`pick(req.body, ["name","bio"])`, DTO/스키마 검증, Rails strong params `permit(:name)`).',
+    en: {
+      title: "Entire request body bound to a model (mass assignment)",
+      description: "The request body is used for create/update without selecting fields. Clients can overwrite sensitive attributes such as `role`, `isAdmin`, `balance` or `ownerId`.",
+      recommendation: "Explicitly pick allowed fields (`pick(req.body, [\"name\",\"bio\"])`, DTO/schema validation, Rails strong params `permit(:name)`).",
+    },
     pattern: /(\.(create|update|insert|save|build|updateOne|updateMany|findByIdAndUpdate|findOneAndUpdate|upsert|merge|assign_attributes|update_attributes)\s*\([^)]*\b(req|request|ctx\.request)\.body\b(?!\s*[.\[])|Object\.assign\([^)]*\b(req|request)\.body\b(?!\s*[.\[])|\.\.\.\s*(req|request)\.body\b(?!\s*[.\[])|\*\*\s*request\.(json|data|form|get_json\(\))|params\.permit!|\.update\(\s*params\[:\w+\]\s*\))/,
   },
   {
@@ -121,6 +164,11 @@ export const RULES: Rule[] = [
     title: '사용자 객체 전체를 응답으로 반환',
     description: 'DB 사용자 객체를 그대로 직렬화해 반환합니다. 비밀번호 해시, 토큰, 내부 플래그 등이 노출될 수 있습니다.',
     recommendation: '응답 DTO/serializer 로 필요한 필드만 반환하세요.',
+    en: {
+      title: "Entire user object returned in the response",
+      description: "A DB user object is serialized and returned as-is. Password hashes, tokens and internal flags may be exposed.",
+      recommendation: "Return only the needed fields through a response DTO/serializer.",
+    },
     pattern: /((res|reply)\.(json|send)\(\s*(user|users|account|accounts|member|profile)\s*\)|jsonify\(\s*(user|users)\.__dict__|return\s+(user|account)\.__dict__)/,
     unless: /(select\(|omit|exclude|toJSON|serialize|Serializer|DTO|password\s*:\s*0|-password|sanitize|toPublic)/i,
     window: 6,
@@ -132,6 +180,11 @@ export const RULES: Rule[] = [
     title: 'JWT 서명/만료 검증 비활성화',
     description: '`none` 알고리즘 허용, 서명 검증 끄기, 만료 무시 등으로 토큰 위조가 가능합니다.',
     recommendation: '알고리즘을 명시적으로 고정(`algorithms: ["RS256"]`)하고 서명·만료 검증을 항상 켜세요.',
+    en: {
+      title: "JWT signature/expiry verification disabled",
+      description: "Allowing the `none` algorithm, turning off signature verification or ignoring expiry makes token forgery possible.",
+      recommendation: "Pin the algorithm explicitly (`algorithms: [\"RS256\"]`) and always keep signature and expiry verification on.",
+    },
     pattern: /(algorithms?\s*[:=]\s*\[?\s*['"]none['"]|verify_signature['"]?\s*:\s*False|jwt\.decode\([^)]*verify\s*=\s*False|ignoreExpiration\s*:\s*true|parseUnsecuredClaims|parseClaimsJwt\(|setSigningKey\(\s*""\s*\))/i,
   },
   {
@@ -141,6 +194,11 @@ export const RULES: Rule[] = [
     title: 'jwt.decode() 사용 (서명 검증 없음)',
     description: '`jsonwebtoken` 의 `decode()` 는 서명을 검증하지 않습니다. 이 결과로 인증/인가 결정을 하면 토큰 위조가 가능합니다.',
     recommendation: '인증 판단에는 반드시 `jwt.verify(token, key, { algorithms: [...] })` 를 사용하세요.',
+    en: {
+      title: "jwt.decode() used (no signature verification)",
+      description: "`decode()` in `jsonwebtoken` does not verify the signature. Making authentication/authorization decisions on its result allows token forgery.",
+      recommendation: "Always use `jwt.verify(token, key, { algorithms: [...] })` for authentication decisions.",
+    },
     pattern: /\bjwt\.decode\(/,
     files: JS,
   },
@@ -151,6 +209,11 @@ export const RULES: Rule[] = [
     title: '추측 가능한 JWT/세션 시크릿',
     description: '`secret`, `changeme` 같은 약한 하드코딩 키로 토큰을 서명합니다. 키를 추측하면 임의 토큰을 발급할 수 있습니다.',
     recommendation: '충분히 긴 랜덤 키를 비밀 저장소/환경변수에서 주입하세요.',
+    en: {
+      title: "Guessable JWT/session secret",
+      description: "Tokens are signed with a weak hardcoded key such as `secret` or `changeme`. Anyone who guesses the key can issue arbitrary tokens.",
+      recommendation: "Inject a sufficiently long random key from a secret store or environment variable.",
+    },
     pattern: /(jwt\.(sign|verify)\([^)]*|secretOrKey\s*:\s*|SECRET_KEY\s*=\s*|JWT_SECRET\w*\s*[:=]\s*|session\(\s*\{[^}]*secret\s*:\s*)['"](secret|changeme|change-me|password|123456|test|dev|default|mysecret|keyboard cat)['"]/i,
   },
   {
@@ -160,6 +223,11 @@ export const RULES: Rule[] = [
     title: '하드코딩된 자격 증명/토큰',
     description: '소스 코드에 API 키나 비밀번호로 보이는 값이 포함되었습니다. 저장소 접근자 누구나 사용할 수 있고 git 히스토리에 영구히 남습니다.',
     recommendation: '키를 즉시 폐기(rotate)하고 환경변수/시크릿 매니저로 옮기세요.',
+    en: {
+      title: "Hardcoded credential/token",
+      description: "The source code contains a value that looks like an API key or password. Anyone with repository access can use it, and it stays in git history permanently.",
+      recommendation: "Revoke (rotate) the key immediately and move it to an environment variable or secret manager.",
+    },
     pattern: /((api[_-]?key|secret|passwd|password|token|private[_-]?key|access[_-]?key|client[_-]?secret)\w*['"]?\s*[:=]\s*['"][A-Za-z0-9_\-\/+=.]{12,}['"]|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{50,}|sk-(proj-|ant-)?[A-Za-z0-9_-]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----)/i,
     unless: /(process\.env|os\.environ|getenv|System\.getenv|ENV\[|example|placeholder|dummy|xxxx|your[_-]|<.*>|\$\{)/i,
     window: 0,
@@ -171,6 +239,11 @@ export const RULES: Rule[] = [
     title: '문자열 결합으로 SQL 쿼리 생성',
     description: '쿼리 문자열을 템플릿/결합/포맷팅으로 만들고 있습니다. 사용자 입력이 섞이면 SQL Injection 이 가능합니다.',
     recommendation: '바인딩 파라미터(`?`, `$1`, `:name`)나 ORM 쿼리 빌더를 사용하세요.',
+    en: {
+      title: "SQL query built by string concatenation",
+      description: "The query string is built with templates, concatenation or formatting. If user input is mixed in, SQL injection is possible.",
+      recommendation: "Use bound parameters (`?`, `$1`, `:name`) or an ORM query builder.",
+    },
     pattern: /(\.(query|execute|raw|exec|executeQuery|executeUpdate|createQuery|createNativeQuery|\$queryRawUnsafe|\$executeRawUnsafe)|cursor\.execute|db\.(Exec|Query|QueryRow))\s*\(\s*(`[^`]*\$\{|f['"]|['"][^'"]*['"]\s*(\+|%)|['"][^'"]*['"]\.format\(|\w+\s*\+\s*\w)/,
   },
   {
@@ -180,6 +253,11 @@ export const RULES: Rule[] = [
     title: '요청 객체를 그대로 NoSQL 쿼리 조건으로 사용',
     description: '`req.body`/`req.query` 를 쿼리 필터로 그대로 넘기면 `{"$ne": null}` 같은 연산자 주입으로 인증 우회·데이터 유출이 가능합니다.',
     recommendation: '필드를 명시적으로 추출하고 타입(string 등)을 검증한 뒤 쿼리에 사용하세요. `mongo-sanitize` 같은 필터도 고려하세요.',
+    en: {
+      title: "Request object used directly as a NoSQL query filter",
+      description: "Passing `req.body`/`req.query` straight into a query filter allows operator injection such as `{\"$ne\": null}`, leading to authentication bypass or data leaks.",
+      recommendation: "Extract fields explicitly and validate their types (e.g. string) before using them in a query. Consider a filter such as `mongo-sanitize`.",
+    },
     pattern: /(\.(find|findOne|where|count\w*|update\w*|delete\w*)\(\s*(req|request)\.(body|query)\s*[,)]|\$where\s*:)/,
   },
   {
@@ -189,6 +267,11 @@ export const RULES: Rule[] = [
     title: '사용자 입력 URL 로 서버가 직접 요청 (SSRF)',
     description: '요청 파라미터로 받은 URL 로 서버가 HTTP 요청을 보냅니다. 내부망(169.254.169.254 메타데이터, 내부 관리 API 등)에 접근하는 데 악용될 수 있습니다.',
     recommendation: '허용 도메인 allowlist 를 적용하고, DNS 해석 후 사설/링크로컬 IP 를 차단하며, 리다이렉트를 제한하세요.',
+    en: {
+      title: "Server makes a request to a user-supplied URL (SSRF)",
+      description: "The server sends an HTTP request to a URL taken from request parameters. This can be abused to reach the internal network (169.254.169.254 metadata, internal admin APIs, etc.).",
+      recommendation: "Apply an allowlist of domains, block private/link-local IPs after DNS resolution, and restrict redirects.",
+    },
     pattern: new RegExp(String.raw`\b(?:fetch|axios(?:\.(?:get|post|put|request))?|got|needle|superagent\.get|requests\.(?:get|post|put|request)|urlopen|httpx\.(?:get|post)|http\.(?:Get|Post)|\w*[rR]estTemplate\.\w+|request)\s*\(\s*[^)]*` + REQ),
     unless: /(allow_?list|whitelist|ALLOWED_(HOSTS|DOMAINS)|isAllowedUrl|validateUrl|isSafeUrl|ssrf)/i,
     window: 5,
@@ -200,6 +283,11 @@ export const RULES: Rule[] = [
     title: 'CORS 전체 허용',
     description: '모든 Origin 을 허용하는 CORS 설정입니다. 쿠키/자격증명과 함께 쓰이면 타 사이트에서 사용자 데이터를 읽을 수 있습니다.',
     recommendation: '신뢰할 Origin 만 명시적으로 허용하세요.',
+    en: {
+      title: "CORS allows every origin",
+      description: "The CORS configuration allows all origins. Combined with cookies/credentials, other sites may read user data.",
+      recommendation: "Explicitly allow only trusted origins.",
+    },
     pattern: /(Access-Control-Allow-Origin['"]?\s*,\s*['"]\*|origin\s*:\s*(['"]\*['"]|true)\s*[,}]|allow_origins\s*=\s*\[\s*['"]\*['"]|CORS_ORIGIN_ALLOW_ALL\s*=\s*True|CORS_ALLOW_ALL_ORIGINS\s*=\s*True|AllowAllOrigins\s*:\s*true|allowedOrigins\(\s*"\*"\)|cors\(\s*\)\s*\))/i,
   },
   {
@@ -209,6 +297,11 @@ export const RULES: Rule[] = [
     title: '스택 트레이스/디버그 정보 노출',
     description: '에러 스택이나 디버그 모드를 외부 응답에 노출합니다. 내부 구조, 경로, 라이브러리 버전이 공격자에게 유출됩니다.',
     recommendation: '클라이언트에는 일반화된 에러 메시지와 요청 ID 만 반환하고 상세 내용은 서버 로그에 남기세요.',
+    en: {
+      title: "Stack trace/debug information exposed",
+      description: "Error stacks or debug mode are exposed in external responses. Internal structure, paths and library versions leak to attackers.",
+      recommendation: "Return only a generic error message and request ID to clients, and keep details in server logs.",
+    },
     pattern: /(\.(json|send)\([^)]*\b(err|error|e|ex)\.stack\b|traceback\.format_exc\(\)|^\s*DEBUG\s*=\s*True|\.run\([^)]*debug\s*=\s*True|printStackTrace\(\))/,
   },
   {
@@ -218,6 +311,11 @@ export const RULES: Rule[] = [
     title: 'TLS 인증서 검증 비활성화',
     description: '외부 API 호출 시 인증서 검증을 끄면 중간자 공격으로 응답을 위조당할 수 있습니다.',
     recommendation: '인증서 검증을 켜고, 사설 CA 가 필요하면 해당 CA 만 신뢰하도록 설정하세요.',
+    en: {
+      title: "TLS certificate verification disabled",
+      description: "Turning off certificate verification when calling external APIs lets a man-in-the-middle forge responses.",
+      recommendation: "Keep certificate verification on; if a private CA is needed, trust only that CA.",
+    },
     pattern: /(rejectUnauthorized\s*:\s*false|NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*['"]?0|verify\s*=\s*False|InsecureSkipVerify\s*:\s*true|_create_unverified_context|TrustAll\w*|NoopHostnameVerifier|ALLOW_ALL_HOSTNAME_VERIFIER)/,
     unless: /jwt/i,
     window: 0,
@@ -229,6 +327,11 @@ export const RULES: Rule[] = [
     title: '페이지 크기 상한 없음',
     description: '클라이언트가 지정한 limit/size 값을 상한 없이 사용합니다. 한 번에 대량 데이터를 요청해 DB/메모리를 고갈시킬 수 있습니다.',
     recommendation: '`Math.min(limit, 100)` 처럼 최대값을 강제하세요.',
+    en: {
+      title: "No upper bound on page size",
+      description: "A client-supplied limit/size value is used without an upper bound. A single request can ask for huge amounts of data and exhaust the DB or memory.",
+      recommendation: "Enforce a maximum, e.g. `Math.min(limit, 100)`.",
+    },
     pattern: new RegExp(String.raw`\b(?:limit|take|per_?page|page_?size|pageSize|size|count)\w*\s*[:=]\s*(?:parseInt\(|Number\(|int\(|\+)?\s*` + REQ, 'i'),
     unless: /(Math\.min|\bmin\(|clamp|MAX_\w+|max_\w+|\ble\s*=|\blte\b|<=|\.max\()/i,
     window: 3,
@@ -240,6 +343,11 @@ export const RULES: Rule[] = [
     title: '디버그/레거시 엔드포인트 추가',
     description: '`/debug`, `/test`, `/v0`, `/legacy` 같은 엔드포인트는 운영 환경에 남아 관리되지 않는 공격 표면이 되기 쉽습니다.',
     recommendation: '운영 빌드에서 제외하거나 인증 뒤로 숨기고, API 인벤토리에 등록하세요.',
+    en: {
+      title: "Debug/legacy endpoint added",
+      description: "Endpoints such as `/debug`, `/test`, `/v0` or `/legacy` tend to stay in production as an unmanaged attack surface.",
+      recommendation: "Exclude them from production builds or put them behind authentication, and register them in the API inventory.",
+    },
     pattern: new RegExp(ROUTE.slice(0, -1) + String.raw`)[^)]*\/(?:v0|beta|test|debug|old|legacy|tmp|dev|graphiql|actuator)\b`, 'i'),
   },
 ];
@@ -248,7 +356,7 @@ const isComment = (s: string) => /^\s*(\/\/|\/\*|\*|#(?![\[!])|--\s)/.test(s);
 
 interface Located { file: string; line?: number; evidence: string }
 
-export function runStaticRules(files: ChangedFile[], rules: Rule[] = RULES): Finding[] {
+export function runStaticRules(files: ChangedFile[], rules: Rule[] = RULES, lang: Lang = DEFAULT_LANG): Finding[] {
   const out: Finding[] = [];
   const seen = new Set<string>();
 
@@ -282,6 +390,7 @@ export function runStaticRules(files: ChangedFile[], rules: Rule[] = RULES): Fin
         const key = `${rule.id}:${loc.file}:${loc.line}`;
         if (seen.has(key)) return;
         seen.add(key);
+        const text = lang === 'ko' ? rule : rule.en;
         out.push({
           id: `S${out.length + 1}`,
           source: 'static',
@@ -289,9 +398,9 @@ export function runStaticRules(files: ChangedFile[], rules: Rule[] = RULES): Fin
           ...loc,
           severity: rule.severity,
           category: rule.category,
-          title: rule.title,
-          description: rule.description,
-          recommendation: rule.recommendation,
+          title: text.title,
+          description: text.description,
+          recommendation: text.recommendation,
         });
       });
     }

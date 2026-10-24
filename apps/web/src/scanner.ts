@@ -5,7 +5,8 @@ import { decrypt } from './crypto.ts';
 import { scans, users } from './db.ts';
 import { isScannable, parsePatch, type ParsedPatch } from './diff.ts';
 import { GitHub } from './github.ts';
-import { buildReviewComments, renderSummaryMarkdown, REPORT_MARKER, shouldFail, statusDescription } from './reporter.ts';
+import { buildReviewComments, renderSummaryMarkdown, REPORT_MARKER, reportText, shouldFail, statusDescription } from './reporter.ts';
+import { isLang } from './i18n.ts';
 
 // Workers 무료 플랜의 서브리퀘스트 한도(50)를 넘지 않도록 전체 파일 컨텍스트는 일부만 가져온다
 const MAX_CHANGED_CONTEXT = 10;
@@ -17,6 +18,8 @@ export async function scanPullRequest({ userId, repo, number, force }: ScanJob):
   const user = await users.get(userId);
   if (!user) throw new Error(`user ${userId} 없음`);
   const gh = new GitHub(decrypt(user.token_enc));
+  const lang = isLang(user.report_lang) ? user.report_lang : config.lang;
+  const text = reportText(lang);
 
   const pr = await gh.getPull(repo, number);
   const sha = pr.head.sha;
@@ -30,7 +33,7 @@ export async function scanPullRequest({ userId, repo, number, force }: ScanJob):
   console.log(`[scan] #${scanId} ${repo}#${number}@${sha.slice(0, 7)} 시작`);
 
   try {
-    await gh.createStatus(repo, sha, 'pending', 'API 보안 검사 중...', detailUrl).catch(() => {});
+    await gh.createStatus(repo, sha, 'pending', text.pending, detailUrl).catch(() => {});
 
     const files = await gh.listPullFiles(repo, number);
     const targets = files.filter((f) => isScannable(f) && f.status !== 'removed');
@@ -53,7 +56,7 @@ export async function scanPullRequest({ userId, repo, number, force }: ScanJob):
       }));
     }
 
-    const result = await analyze({ files, fileContents, relatedContents, pr: { repo, title: pr.title, body: pr.body } });
+    const result = await analyze({ files, fileContents, relatedContents, pr: { repo, title: pr.title, body: pr.body }, lang, simple: !!user.report_simple });
     const summary = renderSummaryMarkdown(result, { detailUrl, sha });
 
     await gh.upsertIssueComment(repo, number, REPORT_MARKER, summary, user.login);
@@ -61,7 +64,7 @@ export async function scanPullRequest({ userId, repo, number, force }: ScanJob):
     const patches = new Map<string, ParsedPatch>(files.map((f) => [f.filename, parsePatch(f.patch)]));
     const comments = buildReviewComments(result, patches);
     if (comments.length) {
-      const body = `🔐 Argos 이 \`${sha.slice(0, 7)}\` 에서 ${comments.length}건을 인라인으로 표시했습니다.`;
+      const body = text.inline(sha.slice(0, 7), comments.length);
       await gh.createReview(repo, number, sha, body, comments).catch((err) => console.warn('[scan] 인라인 리뷰 실패:', err.message));
     }
 
@@ -72,7 +75,7 @@ export async function scanPullRequest({ userId, repo, number, force }: ScanJob):
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await scans.fail(scanId, message);
-    await gh.createStatus(repo, sha, 'error', '검사 중 오류 발생', detailUrl).catch(() => {});
+    await gh.createStatus(repo, sha, 'error', text.failed, detailUrl).catch(() => {});
     throw err;
   }
 }

@@ -2,6 +2,7 @@ import { config } from './config.ts';
 import { isScannable, parsePatch, type ChangedFile } from './diff.ts';
 import { chat, extractJson, llmEnabled } from './llm.ts';
 import { runStaticRules } from './rules.ts';
+import type { Lang } from './i18n.ts';
 import { evidenceIndex, fallbackImpact, normalizeImpact, type EvidenceIndex } from './impact.ts';
 import { CATEGORY_NAMES, SEVERITY_ORDER, severityRank, type AnalysisResult, type Category, type Finding, type Severity } from './types.ts';
 
@@ -13,6 +14,10 @@ export interface AnalyzeInput {
   relatedContents?: Map<string, string>;
   intent?: string;
   pr?: { repo: string; title: string; body?: string | null };
+  /** 리포트 언어. 없으면 서버 기본값(REPORT_LANG, 기본 en) */
+  lang?: Lang;
+  /** AI 설명을 초등학교 5학년도 이해할 수 있게 쉽게 쓴다 */
+  simple?: boolean;
 }
 
 const BATCH_CHARS = 60_000;
@@ -51,10 +56,29 @@ Rules:
      "assumptions": [string], "saferAlternative": string, "verification": [string]}}],
  "static_review": [{"id": "S1", "verdict": "confirmed"|"false_positive", "reason": string}]}`;
 
-const langInstruction = () =>
-  config.lang === 'ko'
+const MSG = {
+  en: {
+    nothingToScan: 'No code changes to scan.',
+    staticOnly: 'Results from static rules only (no LLM).',
+    tooLarge: (n: number) => `The change is too large; only the first ${n} batches were analyzed by the LLM`,
+    aiReview: 'AI review:',
+    llmFailed: 'LLM analysis failed, so only static rule results are shown.',
+  },
+  ko: {
+    nothingToScan: '검사 대상 코드 변경이 없습니다.',
+    staticOnly: '정적 룰 기반 검사 결과입니다 (LLM 미사용).',
+    tooLarge: (n: number) => `변경이 너무 커서 ${n}개 배치까지만 LLM 분석했습니다`,
+    aiReview: 'AI 검토:',
+    llmFailed: 'LLM 분석에 실패하여 정적 룰 결과만 표시합니다.',
+  },
+} satisfies Record<Lang, unknown>;
+
+const langInstruction = (lang: Lang) =>
+  lang === 'ko'
     ? 'Write all explanatory text, including impact explanations, assumptions, alternatives and verification steps, in Korean (한국어). Keep code identifiers as-is.'
     : 'Write all text fields in English.';
+
+const SIMPLE_INSTRUCTION = 'Explain every text field so that a 5th-grade elementary school student (about 11 years old) can understand it: short sentences, everyday words, and a familiar analogy where it helps. Explain any technical term in plain words the first time you use it. Keep file paths, code identifiers, severity and the security facts accurate; simplify the wording, not the content.';
 
 function renderFile(file: ChangedFile, content: string | undefined): string {
   const { lines } = parsePatch(file.patch);
@@ -80,9 +104,12 @@ interface LlmResponse {
 export async function analyze(input: AnalyzeInput): Promise<AnalysisResult> {
   const started = Date.now();
   const scannable = input.files.filter(isScannable);
-  const staticFindings = runStaticRules(scannable);
+  const lang = input.lang ?? config.lang;
+  const staticFindings = runStaticRules(scannable, undefined, lang);
 
   const result: AnalysisResult = {
+    lang,
+    ...(input.simple ? { simple: true } : {}),
     risk: 'none',
     summary: '',
     intent: input.intent?.trim().slice(0, 2000) || undefined,
@@ -94,7 +121,7 @@ export async function analyze(input: AnalyzeInput): Promise<AnalysisResult> {
 
   if (!llmEnabled() || scannable.length === 0) {
     result.findings = staticFindings;
-    result.summary = scannable.length === 0 ? '검사 대상 코드 변경이 없습니다.' : '정적 룰 기반 검사 결과입니다 (LLM 미사용).';
+    result.summary = MSG[lang][scannable.length === 0 ? 'nothingToScan' : 'staticOnly'];
     return finalize(result, started, input);
   }
 
@@ -144,7 +171,8 @@ export async function analyze(input: AnalyzeInput): Promise<AnalysisResult> {
         `Changed files (batch ${bi + 1}/${batches.length}):`,
         ...batch.map((f) => renderFile(f, input.fileContents?.get(f.filename))),
         ...[...related].map(([file, content]) => `=== RELATED UNCHANGED FILE: ${file} ===\n${numbered(content)}`),
-        langInstruction(),
+        langInstruction(lang),
+        input.simple ? SIMPLE_INSTRUCTION : '',
       ].join('\n\n');
 
       try {
@@ -153,7 +181,7 @@ export async function analyze(input: AnalyzeInput): Promise<AnalysisResult> {
         if (parsed.summary) summaries.push(parsed.summary);
         for (const v of parsed.static_review ?? []) verdicts.set(v.id, { verdict: v.verdict, reason: v.reason ?? '' });
         for (const f of parsed.findings ?? []) {
-          const finding = normalizeLlmFinding(f, names, citations);
+          const finding = normalizeLlmFinding(f, names, citations, lang);
           if (finding) llmFindings.push(finding);
         }
       } catch (err) {
@@ -163,14 +191,14 @@ export async function analyze(input: AnalyzeInput): Promise<AnalysisResult> {
   );
 
   result.llm = { used: true, model: config.claude.model, ...(errors.length ? { error: errors.join('; ') } : {}) };
-  if (batches.length > MAX_BATCHES) errors.push(`변경이 너무 커서 ${MAX_BATCHES}개 배치까지만 LLM 분석했습니다`);
+  if (batches.length > MAX_BATCHES) errors.push(MSG[lang].tooLarge(MAX_BATCHES));
 
   // 정적 결과: LLM 이 false_positive 로 본 것은 제외, 판정이 없으면 그대로 유지
   const keptStatic: Finding[] = [];
   for (const s of staticFindings) {
     const v = verdicts.get(s.id);
     if (v?.verdict === 'false_positive') result.dismissed.push({ finding: s, reason: v.reason });
-    else keptStatic.push(v?.reason ? { ...s, description: `${s.description}\n\n> AI 검토: ${v.reason}` } : s);
+    else keptStatic.push(v?.reason ? { ...s, description: `${s.description}\n\n> ${MSG[lang].aiReview} ${v.reason}` } : s);
   }
 
   // LLM 결과와 겹치는 정적 결과는 LLM 결과 하나로 흡수한다 (LLM 설명이 더 구체적).
@@ -190,12 +218,12 @@ export async function analyze(input: AnalyzeInput): Promise<AnalysisResult> {
   merged.push(...keptStatic.filter((s) => !used.has(s)));
 
   result.findings = merged;
-  result.summary = summaries.join('\n\n') || (errors.length ? 'LLM 분석에 실패하여 정적 룰 결과만 표시합니다.' : '');
+  result.summary = summaries.join('\n\n') || (errors.length ? MSG[lang].llmFailed : '');
   if (errors.length) result.llm.error = errors.join('; ');
   return finalize(result, started, input);
 }
 
-function normalizeLlmFinding(f: LlmFinding, files: Set<string>, citations: EvidenceIndex): Finding | null {
+function normalizeLlmFinding(f: LlmFinding, files: Set<string>, citations: EvidenceIndex, lang: Lang): Finding | null {
   if (!f.file || !f.title) return null;
   const confidence = typeof f.confidence === 'number' ? f.confidence : 0.7;
   if (confidence < config.minConfidence) return null;
@@ -217,7 +245,7 @@ function normalizeLlmFinding(f: LlmFinding, files: Set<string>, citations: Evide
     evidence: f.evidence ? String(f.evidence).slice(0, 300) : undefined,
     confidence,
   };
-  finding.impact = normalizeImpact(f.impact, finding, citations);
+  finding.impact = normalizeImpact(f.impact, finding, citations, lang);
   return finding;
 }
 
@@ -225,7 +253,7 @@ const maxSeverity = (a: Severity, b: Severity) => (severityRank(a) >= severityRa
 
 function finalize(result: AnalysisResult, started: number, input: AnalyzeInput): AnalysisResult {
   const citations = evidenceIndex(input.files, input.fileContents);
-  for (const finding of result.findings) finding.impact ??= fallbackImpact(finding, citations);
+  for (const finding of result.findings) finding.impact ??= fallbackImpact(finding, citations, result.lang);
   result.findings.sort((a, b) => severityRank(b.severity) - severityRank(a.severity)
     || Number(b.impact?.source === 'ai') - Number(a.impact?.source === 'ai')
     || a.file.localeCompare(b.file) || (a.line ?? 0) - (b.line ?? 0));

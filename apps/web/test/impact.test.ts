@@ -6,7 +6,8 @@ import { bindEnv } from '../src/config.ts';
 import { relatedPaths } from '../src/context.ts';
 import { splitUnifiedDiff } from '../src/diff.ts';
 import { evidenceIndex, fallbackImpact, normalizeImpact } from '../src/impact.ts';
-import { renderFindingBody, renderSummaryMarkdown } from '../src/reporter.ts';
+import { renderFindingBody, renderSummaryMarkdown, statusDescription } from '../src/reporter.ts';
+import { RULES } from '../src/rules.ts';
 import type { Finding } from '../src/types.ts';
 import { renderFindings } from '../src/ui/server.tsx';
 
@@ -68,7 +69,7 @@ test('상대 import의 실제 파일만 선택하고 중복·바이너리·변�
 });
 
 test('키 없이도 영향 경로·학습·검증 방법이 나오고 의도가 보존된다', async () => {
-  const result = await analyze({ files, intent: '로그인 없이 배송 상태 공유' });
+  const result = await analyze({ files, intent: '로그인 없이 배송 상태 공유', lang: 'ko' });
   assert.equal(result.llm.used, false);
   assert.equal(result.intent, '로그인 없이 배송 상태 공유');
   assert.ok(result.findings.length);
@@ -82,8 +83,25 @@ test('키 없이도 영향 경로·학습·검증 방법이 나오고 의도가 
     assert.match(output, /로그인 없이 배송 상태 공유/);
   }
   assert.equal((html.match(/id="learn-API1"/g) ?? []).length, 1, '같은 분류의 학습은 중복하지 않음');
-  assert.match(renderFindingBody(result.findings[0]), /생각해 보기/);
+  assert.match(renderFindingBody(result.findings[0], true, 'ko'), /생각해 보기/);
   assert.doesNotThrow(() => renderFindings({ ...result, findings: [{ ...sample, impact: undefined }] }), '기존 저장 결과도 표시');
+});
+
+test('PR 리포트는 기본 영어이고, 언어 설정을 따르며 한국어 문구가 섞이지 않는다', async () => {
+  const en = await analyze({ files });
+  assert.equal(en.lang, 'en');
+  const markdown = renderSummaryMarkdown(en);
+  for (const text of [/Argos security review/, /Security impact map · not executed/, /What to learn from this change/, /Recommendation:/]) assert.match(markdown, text);
+  assert.doesNotMatch(markdown, /[가-힣]/, '영어 리포트에 한글이 없어야 함');
+  assert.match(statusDescription({ ...en, findings: [] }), /^No API security issues$/);
+
+  const ko = await analyze({ files, lang: 'ko' });
+  assert.match(renderSummaryMarkdown(ko), /Argos 보안 리뷰/);
+  assert.equal(ko.findings[0].title, RULES.find((r) => r.id === ko.findings[0].ruleId)!.title, '정적 룰도 한국어');
+  assert.equal(en.findings[0].title, RULES.find((r) => r.id === en.findings[0].ruleId)!.en.title, '정적 룰도 영어');
+
+  const legacy = { ...ko, lang: undefined };
+  assert.match(renderSummaryMarkdown(legacy), /Argos security review/, '언어가 없는 이전 결과는 서버 기본값');
 });
 
 test('AI 분석은 변경 목적과 관련 파일을 받고 실제로 전달한 코드만 인용한다', async (t) => {

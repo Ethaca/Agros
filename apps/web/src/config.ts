@@ -1,3 +1,5 @@
+import { DEFAULT_LANG, isLang, type Lang } from './i18n.ts';
+
 export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
 /**
@@ -25,7 +27,8 @@ export const config = {
   get publicUrl() { return required('PUBLIC_URL').replace(/\/$/, ''); },
   get failOn() { return env('FAIL_ON', 'high') as Severity | 'never'; },
   get minConfidence() { return Number(env('MIN_CONFIDENCE', '0.5')); },
-  get lang() { return env('REPORT_LANG', 'ko') as 'ko' | 'en'; },
+  /** 사용자가 설정하지 않았을 때의 PR 리포트 언어 */
+  get lang(): Lang { const v = env('REPORT_LANG', DEFAULT_LANG); return isLang(v) ? v : DEFAULT_LANG; },
   claude: {
     get apiKey() { return env('ANTHROPIC_API_KEY'); },
     get model() { return env('ANTHROPIC_MODEL', 'claude-sonnet-5-5'); },

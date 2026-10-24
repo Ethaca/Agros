@@ -1,3 +1,4 @@
+import type { Lang } from './i18n.ts';
 /** Cloudflare D1 (필요한 만큼만 최소 타입 정의) */
 export interface D1Database {
   prepare(sql: string): D1Statement;
@@ -139,11 +140,27 @@ let migrated: Promise<unknown> | undefined;
 /** isolate 당 한 번 스키마를 보장한다 (D1 은 배포 시 자동 생성되므로 별도 마이그레이션 단계 없이 동작) */
 export async function initDb(database: D1Database) {
   d1 = database;
-  migrated ??= database.batch(SCHEMA.map((s) => database.prepare(s))).catch((err) => {
+  migrated ??= database.batch(SCHEMA.map((s) => database.prepare(s))).then(() => addColumns(database)).catch((err) => {
     migrated = undefined;
     throw err;
   });
   await migrated;
+}
+
+/** 기존 테이블에 나중에 추가한 컬럼. 이미 있으면 D1 이 duplicate column 오류를 내므로 무시한다 */
+const ADDED_COLUMNS = [
+  // PR 리포트 언어 (en | ko). NULL 이면 REPORT_LANG
+  'ALTER TABLE users ADD COLUMN report_lang TEXT',
+  // 1 이면 AI 설명을 초등학교 5학년 수준으로 쉽게 쓴다
+  'ALTER TABLE users ADD COLUMN report_simple INTEGER NOT NULL DEFAULT 0',
+];
+
+export async function addColumns(database: D1Database) {
+  for (const sql of ADDED_COLUMNS) {
+    await database.prepare(sql).run().catch((err: Error) => {
+      if (!/duplicate column/i.test(err.message)) throw err;
+    });
+  }
 }
 
 const q = (sql: string, ...values: unknown[]) => {
@@ -151,7 +168,7 @@ const q = (sql: string, ...values: unknown[]) => {
   return d1.prepare(sql).bind(...values);
 };
 
-export interface UserRow { id: number; github_id: number; login: string; avatar_url: string | null; token_enc: string }
+export interface UserRow { id: number; github_id: number; login: string; avatar_url: string | null; token_enc: string; report_lang?: string | null; report_simple?: number }
 export interface RepoRow { id: number; user_id: number; full_name: string; hook_id: number | null; hook_secret_enc: string | null; enabled: number }
 export interface ScanRow {
   id: number; user_id: number; repo_full_name: string; pr_number: number; pr_title: string | null; head_sha: string;
@@ -160,6 +177,12 @@ export interface ScanRow {
 }
 
 export const users = {
+  async setReportLang(id: number, lang: Lang) {
+    await q('UPDATE users SET report_lang = ? WHERE id = ?', lang, id).run();
+  },
+  async setReportSimple(id: number, simple: boolean) {
+    await q('UPDATE users SET report_simple = ? WHERE id = ?', simple ? 1 : 0, id).run();
+  },
   async upsert(u: { github_id: number; login: string; avatar_url: string; token_enc: string }): Promise<UserRow> {
     await q(`INSERT INTO users (github_id, login, avatar_url, token_enc) VALUES (?, ?, ?, ?)
       ON CONFLICT(github_id) DO UPDATE SET login = excluded.login, avatar_url = excluded.avatar_url, token_enc = excluded.token_enc`,

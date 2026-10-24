@@ -1,6 +1,8 @@
 import { renderToString } from 'react-dom/server';
 import type { ExposureRow, InventoryRow, RepoRow, ScanRow, SignalRow, ThreatListRow, ThreatRow, UserRow } from '../db.ts';
 import type { GhRepo } from '../github.ts';
+import { config } from '../config.ts';
+import { isLang } from '../i18n.ts';
 import type { Level } from '../levels.ts';
 import type { AnalysisResult } from '../types.ts';
 import { App, type PageName, type PageProps } from './app.tsx';
@@ -51,7 +53,8 @@ export function dashboardPage(user: UserRow, ghRepos: GhRepo[], rows: RepoRow[],
   const repos = [...ghRepos]
     .sort((a, b) => Number(enabled.has(b.full_name)) - Number(enabled.has(a.full_name)))
     .map((r) => ({ fullName: r.full_name, private: r.private, htmlUrl: r.html_url, enabled: enabled.has(r.full_name) }));
-  return renderPage('dashboard', { ...base(user, csrf, flash), repos, recent: recent.map(scanSummary) }, '대시보드');
+  const reportLang = isLang(user.report_lang) ? user.report_lang : config.lang;
+  return renderPage('dashboard', { ...base(user, csrf, flash), repos, recent: recent.map(scanSummary), reportLang, reportSimple: !!user.report_simple }, '대시보드');
 }
 
 export function scanPage(user: UserRow, scan: ScanRow, csrf = ''): string {

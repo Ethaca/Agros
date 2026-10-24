@@ -45,7 +45,7 @@ function Impact({ finding }: { finding: Finding }) {
         {impact.steps.map((step, i) => (
           <li key={i} className="p-4 [overflow-wrap:anywhere]">
             <div className="flex items-center gap-2 text-xs font-medium text-gray-500">
-              <span className="grid size-5 place-items-center rounded-full bg-gray-900 text-[11px] text-white">{i + 1}</span>{IMPACT_LABELS[step.kind]}
+              <span className="grid size-5 place-items-center rounded-full bg-gray-900 text-[11px] text-white">{i + 1}</span>{IMPACT_LABELS.ko[step.kind]}
             </div>
             <p className="mt-2 text-sm text-gray-800">{step.explanation}</p>
             <div className="mt-2"><Badge tone={step.evidence.length ? 'blue' : 'yellow'}>{step.evidence.length ? '코드 근거 포함' : '가능성 · 확인 필요'}</Badge></div>
@@ -196,7 +196,7 @@ export function Findings({ result }: { result: AnalysisResult }) {
           {result.intent && <p><span className="font-medium text-gray-900">변경 목적 </span>{result.intent}</p>}
           {result.summary && <p>{result.summary}</p>}
           {result.llm.error && <p className="flex items-center gap-1.5 text-orange-700"><ExclamationTriangleIcon aria-hidden="true" className="size-4" />LLM 오류: {result.llm.error}</p>}
-          <p className="text-xs text-gray-500">{ANALYSIS_NOTICE} diff와 수집된 파일 밖의 보호는 별도 확인이 필요합니다.</p>
+          <p className="text-xs text-gray-500">{ANALYSIS_NOTICE.ko} diff와 수집된 파일 밖의 보호는 별도 확인이 필요합니다.</p>
         </div>
       </Card>
 

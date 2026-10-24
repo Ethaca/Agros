@@ -5,6 +5,7 @@ import { bindEnv, config } from './config.ts';
 import { decrypt, encrypt, randomToken, signPayload, verifyPayload, verifyWebhookSignature } from './crypto.ts';
 import { exposures, ignored, initDb, inventories, radarState, repos, scans, signals, threatPrefs, threats, users, type D1Database, type UserRow } from './db.ts';
 import { exchangeOAuthCode, GitHub, GitHubError, type GhRepo } from './github.ts';
+import { isLang } from './i18n.ts';
 import { collect, createIssueFor, createPrFor, RadarActionError, refreshInventory } from './radar.ts';
 import { scanPullRequest, type ScanJob } from './scanner.ts';
 import { dashboardPage, landingPage, messagePage, radarPage, scanPage } from './ui/server.tsx';
@@ -157,6 +158,18 @@ app.get('/', async (c) => {
   }
   const [rows, recent] = await Promise.all([repos.listForUser(user.id), scans.recentForUser(user.id)]);
   return c.html(dashboardPage(user, ghRepos, rows, recent, c.get('csrf'), FLASH[c.req.query('m') ?? '']));
+});
+
+// ---------- 설정 ----------
+app.post('/settings/report', requireUser, async (c) => {
+  const data = await form(c);
+  if (!data) return csrfFail(c);
+  if (!isLang(data.lang)) return c.redirect('/?m=notfound');
+  const { id } = c.get('user')!;
+  await users.setReportLang(id, data.lang);
+  // 체크하지 않은 체크박스는 form 에 실리지 않는다
+  await users.setReportSimple(id, !!data.simple);
+  return c.redirect('/?m=pref');
 });
 
 app.post('/repos/:owner/:name/enable', requireUser, async (c) => {

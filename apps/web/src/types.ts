@@ -1,4 +1,5 @@
 import type { Severity } from './config.ts';
+import type { Lang } from './i18n.ts';
 
 export type { Severity };
 
@@ -66,6 +67,10 @@ export interface Finding {
 }
 
 export interface AnalysisResult {
+  /** 리포트·LLM 설명의 언어. 이전 버전 결과에는 없을 수 있다 */
+  lang?: Lang;
+  /** AI 설명을 초등학교 5학년 수준으로 쉽게 썼는지 */
+  simple?: boolean;
   risk: Severity | 'none';
   summary: string;
   intent?: string;

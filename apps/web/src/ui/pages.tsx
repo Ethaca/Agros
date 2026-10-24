@@ -1,4 +1,5 @@
 import { AlertDialog } from '@base-ui/react/alert-dialog';
+import { Checkbox } from '@base-ui/react/checkbox';
 import { Field } from '@base-ui/react/field';
 import { Select } from '@base-ui/react/select';
 import { Switch } from '@base-ui/react/switch';
@@ -8,6 +9,7 @@ import {
 } from '@heroicons/react/16/solid';
 import { useEffect, useMemo, useState } from 'react';
 import type { AnalysisResult } from '../types.ts';
+import { LANG_NAMES, LANGS, type Lang } from '../i18n.ts';
 import { Findings } from './findings.tsx';
 import { BACKDROP, Btn, btnClass, Card, CardHeader, cx, DIALOG, FOCUS, INPUT, ITEM, LABEL, PageHeader, POPUP, PostForm, SeverityPill, Shell, submitForm, type BaseProps } from './kit.tsx';
 
@@ -115,6 +117,44 @@ function RepoRow({ repo, index, onAskDisable }: { repo: RepoItem; index: number;
   );
 }
 
+function LangSelect({ value }: { value: Lang }) {
+  return (
+    <Select.Root name="lang" items={LANGS.map((l) => ({ value: l, label: LANG_NAMES[l] }))} defaultValue={value}>
+      <Select.Label className={LABEL}>리포트 언어</Select.Label>
+      <Select.Trigger className={cx('flex h-9 min-w-40 items-center justify-between gap-3 rounded-md border border-gray-200 bg-white pr-2.5 pl-3 text-sm text-gray-900 select-none hover:bg-gray-50 data-popup-open:bg-gray-50', FOCUS)}>
+        <Select.Value />
+        <Select.Icon className="flex text-gray-500"><ChevronUpDownIcon aria-hidden="true" className="size-4" /></Select.Icon>
+      </Select.Trigger>
+      <Select.Portal>
+        <Select.Positioner sideOffset={8} className="z-50 outline-none select-none">
+          <Select.Popup className={cx(POPUP, 'min-w-(--anchor-width) py-1')}>
+            <Select.List>
+              {LANGS.map((l) => (
+                <Select.Item key={l} value={l} className={cx(ITEM, 'grid grid-cols-[0.75rem_1fr] pl-2.5')}>
+                  <Select.ItemIndicator className="col-start-1"><CheckIcon aria-hidden="true" className="size-3" /></Select.ItemIndicator>
+                  <Select.ItemText className="col-start-2">{LANG_NAMES[l]}</Select.ItemText>
+                </Select.Item>
+              ))}
+            </Select.List>
+          </Select.Popup>
+        </Select.Positioner>
+      </Select.Portal>
+    </Select.Root>
+  );
+}
+
+function SimpleCheckbox({ defaultChecked }: { defaultChecked: boolean }) {
+  return (
+    <label className="flex h-9 cursor-pointer items-center gap-2.5 text-sm text-gray-900">
+      <Checkbox.Root name="simple" value="1" defaultChecked={defaultChecked}
+        className={cx('flex size-4 flex-none items-center justify-center rounded-sm border border-gray-300 bg-white data-checked:border-gray-900 data-checked:bg-gray-900', FOCUS)}>
+        <Checkbox.Indicator className="flex text-white data-unchecked:hidden"><CheckIcon aria-hidden="true" className="size-3" /></Checkbox.Indicator>
+      </Checkbox.Root>
+      초등학교 5학년 수준으로 설명하기
+    </label>
+  );
+}
+
 function RepoSelect({ names }: { names: string[] }) {
   return (
     <Select.Root name="repo" items={names.map((n) => ({ value: n, label: n }))} defaultValue={names[0]}>
@@ -141,9 +181,9 @@ function RepoSelect({ names }: { names: string[] }) {
   );
 }
 
-export interface DashboardProps extends BaseProps { repos: RepoItem[]; recent: ScanSummary[] }
+export interface DashboardProps extends BaseProps { repos: RepoItem[]; recent: ScanSummary[]; reportLang: Lang; reportSimple: boolean }
 
-export function Dashboard({ repos, recent, ...base }: DashboardProps) {
+export function Dashboard({ repos, recent, reportLang, reportSimple, ...base }: DashboardProps) {
   const [filter, setFilter] = useState('');
   const [confirm, setConfirm] = useState<{ repo: RepoItem; formId: string } | null>(null);
   const shown = useMemo(() => repos.filter((r) => r.fullName.toLowerCase().includes(filter.trim().toLowerCase())), [repos, filter]);
@@ -181,6 +221,15 @@ export function Dashboard({ repos, recent, ...base }: DashboardProps) {
             </PostForm>
           </Card>
         )}
+
+        <Card>
+          <CardHeader title="PR 리포트 설정" description="PR 코멘트·인라인 리뷰·커밋 상태에 적용됩니다. 다음 검사부터 반영됩니다." />
+          <PostForm action="/settings/report" className="flex flex-wrap items-end gap-x-6 gap-y-4 px-5 py-4">
+            <div className="grid gap-1.5"><LangSelect value={reportLang} /></div>
+            <SimpleCheckbox defaultChecked={reportSimple} />
+            <Btn type="submit">저장</Btn>
+          </PostForm>
+        </Card>
       </div>
 
       <AlertDialog.Root open={!!confirm} onOpenChange={(o) => { if (!o) setConfirm(null); }}>
