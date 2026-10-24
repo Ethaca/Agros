@@ -16,9 +16,12 @@ Every step uses **exactly this card** (🎯 says why the step exists), nothing m
 ```
 **[n/6] 단계 이름**
 🎯 <what this step is for, one line>
-▶ <what you ran / what happened, one or two lines, with the URL if any>
+▶ <what you ran / what happened, one or two lines>
+🔗 <link> — <what to look at there, a few words>   (steps 2–5; build links from the command output)
 💡 <the one idea to take away, one line>
 ```
+
+The 🔗 line invites the user to open the link and see it for themselves before moving on ("직접 확인해 보세요").
 
 Then move on with `AskUserQuestion`: one question, options `다음 단계` / `그만하기` (plus step-specific options below). No other prose, no tables, no recap of earlier steps.
 
@@ -62,19 +65,23 @@ Show this intro verbatim (translate if the user is not Korean), then ask `시작
 
 Then `demo.sh create --stack <node|spring> --repo <owner/name> --lang <ko|en> [--public]`.
 - 🎯 Node: 벤더마다 자기 데이터만 보는 데이터 라벨링 API. Spring: 조직·역할이 있는 협업 문서 서비스. 둘 다 실제 SaaS 구조를 본떴다.
+- 🔗 `https://github.com/<repo>` — 앱 코드와 `.github/workflows/argos.yml`. Node는 `argos.config.yaml`(규칙), Spring은 `src/main/java/com/acme/workspace/service/ProjectService.java`(조직 조건)를 열어 보게 한다.
 - 💡 Node: `argos.config.yaml` = "누가 무엇을 볼 수 있나" 규칙. Spring: 설정 0줄, Argos가 코드·DB 스키마에서 규칙 초안을 만든다.
 
 **[3/6] 취약한 PR 올리기** — show only the `-`/`+` lines of `${CLAUDE_PLUGIN_ROOT}/patches/<node|spring>.patch`, then `demo.sh pr --repo <owner/name> --lang <ko|en>` (it detects the stack from the repo).
 - 🎯 실제 개발처럼, 정리처럼 보이는 PR이 보안 구멍을 연다.
+- 🔗 `<PR url>/files` — 바뀐 줄. 리뷰어라면 문제를 알아챌 수 있을지 생각해 보게 한다.
 - 💡 Node: ① vendor 조건 삭제 → 남의 데이터 조회 ② `SELECT *` → API 키 노출. Spring: ① 조직 조건 삭제 → 다른 회사 프로젝트 조회 ② 작성자 조건 삭제 → 동료 문서 조회 ③ 관리자 규칙 삭제 → 일반 멤버가 관리자 API 사용. 코드 리뷰로는 놓치기 쉽다.
 
 **[4/6] Argos 실행 지켜보기** — `demo.sh watch --repo <owner/name>` with `run_in_background: true`. Show the card right away with the Actions URL, then wait for the completion notification (do not poll). On failure: `gh run view <id> --repo <owner/name> --log-failed | tail -30`.
 - 🎯 PR이 올라오자 Argos가 자동으로 앱을 띄워 공격한다 (Node 1~3분, Spring 약 4분: 빌드·DB 준비 포함).
+- 🔗 the Actions run URL from watch — `prepare`(앱 실행·공격)와 `publish`(리포트 PR) 두 job이 차례로 도는 모습. The PR page (`<PR url>`) also shows the check running.
 - 💡 앱은 네트워크·쓰기 토큰 없는 Docker 안에서 돈다. Spring은 PostgreSQL과 테스트용 JWT 발급자도 Argos가 띄운다.
 
 **[5/6] 리포트 받기** — `demo.sh report --repo <owner/name> --save ./argos-demo-report.md`, then `gh pr diff <report PR url>`.
 - 🎯 무엇이 뚫렸고, 무엇을 고쳤고, 고친 게 통하는지.
 - ▶ 🔴 before → after, the fixed lines (one line each), report PR URL.
+- 🔗 `<report PR url>` — 요약. `https://github.com/<repo>/blob/<report branch>/.argos/report.md` — 전체 리포트(증거 요청 포함). Node: `<report PR url>/files` — 수정된 줄. Spring: 같은 탭의 `argos.config.yaml` — Argos가 만든 규칙 초안. Report branch: `argos/report-feature-vendor-dashboard` (Node) / `argos/report-feature-project-sharing` (Spring).
 - 💡 Node: 같은 공격을 다시 해서 막힌 수정만 PR에 들어간다. Spring: 자동 수정 없이 리포트와 Argos가 만든 설정 초안(`argos.config.yaml`)이 들어간다. 사람이 규칙을 확인하면 다음 PR부터 그 규칙으로 검사한다.
 - Extra option: `브라우저로 열기` → `gh pr view <url> --web`.
 
