@@ -6,7 +6,7 @@ import { Select } from '@base-ui/react/select';
 import { Switch } from '@base-ui/react/switch';
 import {
   AcademicCapIcon, ArrowPathIcon, ChatBubbleLeftRightIcon, CheckIcon, ChevronRightIcon, ChevronUpDownIcon, Cog6ToothIcon,
-  ExclamationTriangleIcon, LockClosedIcon, MagnifyingGlassIcon, MapIcon, SignalIcon,
+  ExclamationTriangleIcon, LockClosedIcon, MagnifyingGlassIcon, SignalIcon,
 } from '@heroicons/react/16/solid';
 import { useEffect, useMemo, useState } from 'react';
 import type { AnalysisResult } from '../types.ts';
@@ -18,7 +18,6 @@ import { BACKDROP, Btn, btnClass, Card, CardHeader, cx, DIALOG, FOCUS, INPUT, IT
 // ---------- 랜딩 ----------
 
 const FEATURES = [
-  { icon: MapIcon, title: '보안 영향 지도', body: '변경 → 가능한 접근 → 데이터와 기능에 미치는 영향을 연결합니다. 코드 근거와 추정을 구분해 보여줍니다.' },
   { icon: SignalIcon, title: 'Threat Radar', body: 'SNS·커뮤니티에 먼저 퍼지는 위협을 공식 권고와 묶어, 내 레포의 lock 파일과 Dockerfile 에 영향이 있는지 알려줍니다.' },
   { icon: ChatBubbleLeftRightIcon, title: 'PR 에 바로 표시', body: '요약 코멘트, 인라인 리뷰, commit status 로 머지 전에 차단합니다.' },
   { icon: AcademicCapIcon, title: '고치면서 배우는 보안', body: 'AI 코드에서 놓치기 쉬운 개념, 생각해 볼 질문, 직접 검증할 체크리스트를 제공합니다.' },
@@ -37,7 +36,7 @@ export function Landing(props: BaseProps) {
           <Btn href="/auth/github" variant="primary" size="lg">GitHub 로 시작하기</Btn>
         </div>
       </section>
-      <dl className="grid border-t border-gray-200 sm:grid-cols-2 lg:grid-cols-4 lg:divide-x lg:divide-gray-200">
+      <dl className="grid border-t border-gray-200 sm:grid-cols-3 lg:divide-x lg:divide-gray-200">
         {FEATURES.map((f) => (
           <div key={f.title} className="py-8 lg:px-6 lg:first:pl-0">
             <dt className="flex items-center gap-2 text-sm font-semibold text-gray-900"><f.icon aria-hidden="true" className="size-4" />{f.title}</dt>
