@@ -82,7 +82,7 @@ export function fakeJvm(cfg: Config): FakeJvm {
     const did = `d-${p.org}-${userKey(p)}`;
     const dmarker = `ARGOS_R${++n}_d${userKey(p)}`;
     put("documents", key, { id: did, org_id: m.orgIds[p.org]!, project_id: m.rows.projects![p.org]!.id!, owner_id: uid, title: dmarker });
-    mark(["document-read", "document-update"], key, p.org, dmarker, did);
+    mark(["document-read", "document-update", "document-list"], key, p.org, dmarker, did);
   }
 
   const db = {
@@ -137,6 +137,12 @@ export function fakeJvmApp(f: FakeJvm, cfg: Config, flaws: Flaws = {}): Promise<
           const r = T.projects!.find((x) => x.id === mm![1]);
           if (!r || (r.org_id !== orgId && !flaws.noOrgCheck)) return json(res, 404, {});
           return json(res, 200, r);
+        }
+        mm = /^\/api\/projects\/(\w+)\/documents$/.exec(path);
+        if (mm && req.method === "GET") {
+          const pr = T.projects!.find((x) => x.id === mm![1]);
+          if (!pr || (pr.org_id !== orgId && !flaws.noOrgCheck)) return json(res, 404, {});
+          return json(res, 200, { content: T.documents!.filter((d) => d.project_id === pr.id && (flaws.noOwnerCheck || d.owner_id === me.id)) });
         }
         mm = /^\/api\/projects\/(\w+)\/documents\/([\w-]+)$/.exec(path);
         if (mm) {

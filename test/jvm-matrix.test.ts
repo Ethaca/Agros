@@ -8,13 +8,13 @@ import { mintPersonaTokens } from "../src/tokens.js";
 import { Matrix, type MatrixCell } from "../src/types.js";
 import { fakeJvm, fakeJvmApp, type Flaws } from "./helpers/fake-jvm.js";
 import { cfg as legacyCfg } from "./helpers/fake-app.js";
-import { springConfig } from "./helpers/spring-config.js";
+import { springConfig, springRaw } from "./helpers/spring-config.js";
 
 const find = (cells: MatrixCell[], persona: string, resource: string, target?: string, targetUser?: string) =>
   cells.find((c) => c.persona === persona && c.resource === resource && c.target === target && c.targetUser === targetUser);
 
-async function scan(flaws: Flaws = {}) {
-  const cfg = springConfig();
+async function scan(flaws: Flaws = {}, over: Record<string, unknown> = {}) {
+  const cfg = springConfig(over);
   const f = fakeJvm(cfg);
   const srv = await fakeJvmApp(f, cfg, flaws);
   try {
@@ -89,6 +89,25 @@ test("missing owner check: same-org reads and writes are red", async () => {
   assert.deepEqual([write.observed, write.verdict], ["allow", "VULNERABLE"]);
   assert.ok(findings.some((f) => f.check === "bola" && f.verdict === "VULNERABLE" && /in the same org/.test(f.detail)));
   assert.equal(find(matrix.cells, "alice-member", "document-read", "orgB", "bob-admin")!.verdict, "OK", "org check still holds");
+});
+
+test("collection route scoped to the caller: same-org list without the colleague's rows is deny/OK, not suspected", async () => {
+  const documentList = {
+    id: "document-list",
+    route: "GET /api/projects/{projectId}/documents",
+    owner: { table: "documents", column: "owner_id", scope: "user" },
+    pathParams: { projectId: { table: "projects" } },
+    expect: { owner: "allow", other: "deny", anonymous: "deny" },
+  };
+  const over = { resources: [...springRaw().resources, documentList] };
+  const ok = await scan({}, over);
+  const own = find(ok.matrix.cells, "alice-member", "document-list", "orgA", "alice-member")!;
+  assert.deepEqual([own.observed, own.verdict], ["allow", "OK"]);
+  const colleague = find(ok.matrix.cells, "alice-member", "document-list", "orgA", "alice-member2")!;
+  assert.deepEqual([colleague.relation, colleague.observed, colleague.verdict], ["same-org", "deny", "OK"]);
+  assert.deepEqual(ok.matrix.cells.filter((c) => c.resource === "document-list" && c.verdict !== "OK").map((c) => `${c.persona}->${c.targetUser}:${c.verdict}`), []);
+  const leaky = await scan({ noOwnerCheck: true }, over);
+  assert.equal(find(leaky.matrix.cells, "alice-member", "document-list", "orgA", "alice-member2")!.verdict, "VULNERABLE");
 });
 
 test("missing role check: members reach admin-only API (function level)", async () => {

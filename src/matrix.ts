@@ -371,7 +371,10 @@ export async function runMatrixDetailed(
     raw[i] = res;
     const me = p.persona.org ? userKey(p.persona) : undefined;
     const own = !!p.target && p.target === p.persona.org && (!p.targetUser || p.targetUser === me) && !p.relation;
-    const paramless = routeParams(parseRoute(p.resource.route).path).length === 0;
+    // Collection route: no path param picks a row of the owner table (e.g. /projects/{projectId}/documents
+    // lists documents). A param without a pathParams entry is taken to address the owner table (legacy :id).
+    const ownerTable = p.resource.owner?.table;
+    const collection = !routeParams(parseRoute(p.resource.route).path).some((n) => (p.resource.pathParams?.[n]?.table ?? ownerTable) === ownerTable);
 
     let observed: Observed;
     let dbNote: string | undefined;
@@ -405,7 +408,8 @@ export async function runMatrixDetailed(
         body: res.body,
         markers: b.markers,
         ownRequest: own,
-        scopedList: paramless && !p.relation && !!p.persona.org && !!p.target && !own,
+        // A list scoped to the caller (no other org's / other user's markers) is the correct, denying behaviour.
+        scopedList: collection && (!p.relation || p.relation === "same-org") && !!p.persona.org && !!p.target && !own,
       });
     }
     const ev = evidenceFor(res, b.markers, manifest);
