@@ -275,7 +275,7 @@ function buildRequest(cfg: Config, p: Plan, manifest: SeedManifest): Built | { s
 }
 
 /** Count + hash of the verified column for the rows a write should (or should not) touch. */
-async function dbSnapshot(db: DbHandle, r: Resource, ctx: Ctx, manifest: SeedManifest): Promise<string | { skip: string }> {
+function snapshotWhere(r: Resource, ctx: Ctx, manifest: SeedManifest): string | { skip: string } {
   const wv = r.writeVerify!;
   let where: string;
   if (wv.where) {
@@ -289,10 +289,33 @@ async function dbSnapshot(db: DbHandle, r: Resource, ctx: Ctx, manifest: SeedMan
     if (!pk || id === undefined || id === null) return { skip: `writeVerify: no seeded ${wv.table} row to compare (set writeVerify.where)` };
     where = `${qi(pk)}::text = ${lit(id)}`;
   }
+  return where;
+}
+
+async function dbSnapshot(db: DbHandle, r: Resource, ctx: Ctx, manifest: SeedManifest): Promise<string | { skip: string }> {
+  const wv = r.writeVerify!;
+  const where = snapshotWhere(r, ctx, manifest);
+  if (typeof where !== "string") return where;
   const rows = await db.query(
     `SELECT count(*)::text AS n, md5(coalesce(string_agg(${qi(wv.column)}::text, ',' ORDER BY ${qi(wv.column)}::text), '')) AS h FROM ${qi(wv.table)} WHERE ${where}`,
   );
   return `${rows[0]?.n}:${rows[0]?.h}`;
+}
+
+/**
+ * Delete probes: keep a copy of the targeted rows and put back whatever the request removed, so a
+ * successful attack cannot take away the row later probes (and the owner's own control) need.
+ * Rows removed by ON DELETE CASCADE in other tables are not restored.
+ */
+async function saveRows(db: DbHandle, r: Resource, ctx: Ctx, manifest: SeedManifest): Promise<(() => Promise<void>) | undefined> {
+  const where = snapshotWhere(r, ctx, manifest);
+  if (typeof where !== "string") return undefined;
+  const t = qi(r.writeVerify!.table);
+  const rows = await db.query(`SELECT row_to_json(x)::text AS j FROM ${t} x WHERE ${where}`);
+  const saved = rows.map((x) => String(x.j));
+  return async () => {
+    for (const j of saved) await db.exec(`INSERT INTO ${t} SELECT * FROM json_populate_record(NULL::${t}, ${lit(j)}) ON CONFLICT DO NOTHING;`);
+  };
 }
 
 /** Build the full plan matrix against a running target. Requests run sequentially. */
@@ -310,7 +333,7 @@ export async function runMatrixDetailed(
   const withAction = (r: Resource) => jvm || !!r.action;
 
   // jvm: reads first, then writes (attacks before the owner's own write), deletes last, so one write
-  // cannot remove the row another request needs. Output keeps plan order.
+  // cannot remove the row another request needs (a row a delete probe removed is restored). Output keeps plan order.
   const rank = (p: Plan): number => {
     if (!jvm) return 0;
     const a = actionOf(p.resource);
@@ -367,6 +390,15 @@ export async function runMatrixDetailed(
       }
     }
 
+    let restore: (() => Promise<void>) | undefined;
+    if (verify && actionOf(p.resource) === "delete") {
+      try {
+        restore = await saveRows(verify, p.resource, b.ctx, manifest);
+      } catch {
+        restore = undefined; // verdict still comes from the snapshot; later probes may find the row gone
+      }
+    }
+
     const res: HttpResult = await sendAs(baseUrl, p.persona, b.method, b.path, { timeoutMs: opts.timeoutMs, maxResponseBytes: opts.maxResponseBytes, json: b.json, query: b.query, token });
     raw[i] = res;
     const me = p.persona.org ? userKey(p.persona) : undefined;
@@ -378,6 +410,7 @@ export async function runMatrixDetailed(
 
     let observed: Observed;
     let dbNote: string | undefined;
+    let dbRestoreNote: string | undefined;
     if (jvm && write) {
       let changed: boolean | undefined;
       if (verify && before !== undefined) {
@@ -386,6 +419,13 @@ export async function runMatrixDetailed(
           changed = typeof after === "string" ? after !== before : undefined;
         } catch {
           changed = undefined;
+        }
+      }
+      if (restore && changed) {
+        try {
+          await restore();
+        } catch (e) {
+          dbRestoreNote = `deleted row could not be restored: ${(e as Error).message.split("\n")[0]}`;
         }
       }
       const s = res.status;
@@ -413,6 +453,7 @@ export async function runMatrixDetailed(
       });
     }
     const ev = evidenceFor(res, b.markers, manifest);
+    if (dbRestoreNote) dbNote = dbNote ? `${dbNote}; ${dbRestoreNote}` : dbRestoreNote;
     if (dbNote) ev.note = ev.note ? `${dbNote}; ${ev.note}` : dbNote;
     cells[i] = { ...cellBase(p, wa), expected: p.expected, observed, verdict: verdictFor(p.expected, observed), evidence: ev };
   }

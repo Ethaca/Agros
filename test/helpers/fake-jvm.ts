@@ -82,12 +82,17 @@ export function fakeJvm(cfg: Config): FakeJvm {
     const did = `d-${p.org}-${userKey(p)}`;
     const dmarker = `ARGOS_R${++n}_d${userKey(p)}`;
     put("documents", key, { id: did, org_id: m.orgIds[p.org]!, project_id: m.rows.projects![p.org]!.id!, owner_id: uid, title: dmarker });
-    mark(["document-read", "document-update", "document-list"], key, p.org, dmarker, did);
+    mark(["document-read", "document-update", "document-list", "document-delete"], key, p.org, dmarker, did);
   }
 
   const db = {
     tables,
     async query(sql: string): Promise<SqlRow[]> {
+      const save = /^SELECT row_to_json\(x\)::text AS j FROM "([^"]+)" x WHERE (.*)$/s.exec(sql);
+      if (save) {
+        const conds = [...save[2]!.matchAll(/"([^"]+)"::text = '([^']*)'/g)].map((x) => [x[1]!, x[2]!] as const);
+        return tables[save[1]!]!.filter((r) => conds.every(([k, v]) => r[k] === v)).map((r) => ({ j: JSON.stringify(r) }));
+      }
       const t = /FROM "([^"]+)" WHERE (.*)$/s.exec(sql);
       const col = /string_agg\("([^"]+)"::text/.exec(sql);
       if (!t || !col) throw new Error(`fake db: unsupported SQL ${sql}`);
@@ -96,7 +101,12 @@ export function fakeJvm(cfg: Config): FakeJvm {
       const vals = rows.map((r) => r[col[1]!] ?? "").sort();
       return [{ n: String(rows.length), h: md5(vals.join(",")) }];
     },
-    async exec(): Promise<void> {},
+    async exec(sql: string): Promise<void> {
+      const ins = /^INSERT INTO "([^"]+)" SELECT \* FROM json_populate_record\(NULL::"[^"]+", '(.*)'\) ON CONFLICT DO NOTHING;$/s.exec(sql);
+      if (!ins) throw new Error(`fake db: unsupported SQL ${sql}`);
+      const row = JSON.parse(ins[2]!.replace(/''/g, "'")) as Row;
+      if (!tables[ins[1]!]!.some((r) => r.id === row.id)) tables[ins[1]!]!.push(row);
+    },
   };
   return { manifest: m, tokens, db };
 }
@@ -149,6 +159,11 @@ export function fakeJvmApp(f: FakeJvm, cfg: Config, flaws: Flaws = {}): Promise<
           const d = T.documents!.find((x) => x.id === mm![2] && x.project_id === mm![1]);
           if (!d || (d.org_id !== orgId && !flaws.noOrgCheck) || (d.owner_id !== me.id && !flaws.noOwnerCheck)) return json(res, 404, {});
           if (req.method === "GET") return json(res, 200, flaws.omitTitle ? { id: d.id } : d);
+          if (req.method === "DELETE") {
+            if (!flaws.writeNoop) T.documents!.splice(T.documents!.indexOf(d), 1);
+            res.writeHead(204).end();
+            return;
+          }
           if (req.method === "PUT") {
             const b = JSON.parse(body || "{}") as { title?: string; body?: string };
             if (!b.title || !b.body) return json(res, 400, {});
