@@ -13,6 +13,7 @@ import { dirname, join } from "node:path";
 import { runScan, ScanError } from "./scan.js";
 import { SeedError } from "./seed.js";
 import { annotateConfig, bridgeFindings, parseArgosApiFindings, renderDraftConfig } from "./bridge.js";
+import { registerCanaryCommands } from "./canary/cli.js";
 
 function parseIsolation(v?: string): "process" | "container" | undefined {
   if (v === undefined) return undefined;
@@ -180,4 +181,5 @@ program
     }
   });
 
+registerCanaryCommands(program);
 await program.parseAsync();
