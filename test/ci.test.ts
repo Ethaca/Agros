@@ -28,9 +28,9 @@ test("ci runs every step and leaves the source untouched by default", async () =
   assert.equal(r.pr, null);
   assert.equal(readFileSync(join(dir, "app.mjs"), "utf8"), before, "verified patches are not written without --apply/--pr");
   const md = readFileSync(r.reportPath, "utf8");
-  assert.match(md, /증빙 헤더/);
-  assert.match(md, /✅ 채택: limit columns/);
-  assert.match(md, /matrix\.json ✅ 일치/);
+  assert.match(md, /Evidence header/);
+  assert.match(md, /✅ adopted: limit columns/);
+  assert.match(md, /matrix\.json ✅ match/);
   const summary = JSON.parse(readFileSync(r.summaryPath, "utf8"));
   assert.equal(summary.pr, null);
   assert.ok(summary.after.VULNERABLE < summary.before.VULNERABLE);
@@ -41,8 +41,8 @@ test("the report describes the ORIGINAL code, the fix section describes the patc
   const o = base(join(copy(), "argos.config.yaml"));
   const r = await runCi(o);
   const md = readFileSync(r.reportPath, "utf8");
-  assert.match(md, new RegExp(`🔴 취약 ${r.fix.before.VULNERABLE} `));
-  assert.match(md, new RegExp(`채택한 패치를 모두 적용한 뒤 🔴 ${r.fix.after!.VULNERABLE}`));
+  assert.match(md, new RegExp(`🔴 vulnerable ${r.fix.before.VULNERABLE} `));
+  assert.match(md, new RegExp(`after applying every adopted patch 🔴 ${r.fix.after!.VULNERABLE}`));
 });
 
 test("exit code follows the original code: block mode + red findings = 2 even though a fix was verified", async () => {
@@ -72,8 +72,8 @@ test("--pr opens a PR with the verified patch and puts the summary in the PR bod
     assert.match(lab.git("show", "main:app.mjs"), /"SELECT \* FROM vendors WHERE id = \?"/, "main keeps the vulnerable query");
     assert.ok(!/prepare\("SELECT \* FROM vendors/.test(lab.git("show", `${r.pr!.branch}:app.mjs`)), "the branch has it fixed");
     assert.equal(JSON.parse(readFileSync(r.summaryPath, "utf8")).pr.branch, r.pr!.branch);
-    assert.match(readFileSync(r.files.prBody, "utf8"), /검증된 수정 1건/);
-    assert.match(lab.ghBody(), /검증된 수정 1건/, "the same summary is the PR description");
+    assert.match(readFileSync(r.files.prBody, "utf8"), /1 verified fix/);
+    assert.match(lab.ghBody(), /1 verified fix/, "the same summary is the PR description");
   } finally {
     process.env.PATH = saved;
   }

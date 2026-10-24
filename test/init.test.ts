@@ -246,8 +246,8 @@ test("init output feeds the rest of the tool: scan works on it and the report li
   assert.ok(s.meta.unconfirmed.length > 0);
   assert.ok(s.meta.unconfirmed.includes("resources.get-notes-id.expect"));
   const md = renderReport(loadScan({ scanDir: out }));
-  assert.match(md, /미확인 기대 규칙 \d+개/);
-  assert.match(md, /AI 초안 \d+개 미확인/);
+  assert.match(md, /\d+ unconfirmed expectations?/);
+  assert.match(md, /\d+ AI draft fields? unconfirmed/);
   assert.match(md, /resources\.get-notes-id\.expect/);
 });
 

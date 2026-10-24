@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { parse } from "yaml";
 import { z } from "zod";
-import { Access, CheckName } from "./types.js";
+import { Access, CheckName, ReportLang } from "./types.js";
 
 const Auth = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("bearer"), token: z.string().min(1) }),
@@ -93,6 +93,8 @@ export const Config = z
      */
     provenance: z.record(z.string(), z.enum(["confirmed", "ai-draft"])).optional(),
     mode: z.enum(["report", "block"]).default("report"),
+    /** Evidence report / PR summary language. */
+    report: z.strictObject({ lang: ReportLang.default("en") }).default({ lang: "en" }),
     llm: z
       .strictObject({
         provider: z.literal("anthropic"),

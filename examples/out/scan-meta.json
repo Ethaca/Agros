@@ -3,11 +3,12 @@
     "name": "argos",
     "version": "0.0.0"
   },
-  "startedAt": "2026-10-24T05:24:23.498Z",
-  "finishedAt": "2026-10-24T05:24:23.998Z",
-  "durationMs": 500,
+  "startedAt": "2026-10-24T06:24:09.659Z",
+  "finishedAt": "2026-10-24T06:24:10.012Z",
+  "durationMs": 353,
   "target": "vendor-platform",
   "mode": "report",
+  "reportLang": "en",
   "isolation": "process",
   "image": null,
   "config": {

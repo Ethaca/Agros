@@ -113,6 +113,7 @@ export async function runScan(opts: ScanOptions): Promise<ScanResult> {
       durationMs: finishedAt.getTime() - startedAt.getTime(),
       target: basename(dirname(configPath)),
       mode: cfg.mode,
+      reportLang: cfg.report.lang,
       isolation: ran.isolation,
       image: ran.image,
       config: { file: basename(configPath), sha256: hashConfigText(configText) },

@@ -5,9 +5,12 @@ import { runFix, type FixReport } from "./fix/index.js";
 import { applyEdits } from "./fix/rules.js";
 import { onFixBranch, openFixPr, type PrResult } from "./pr.js";
 import { renderSummary, writeReport } from "./report.js";
+import type { ReportLang } from "./types.js";
 import type { Isolation } from "./runner.js";
 
 export interface CiOptions {
+  /** Report language override (default: config `report.lang`). */
+  lang?: ReportLang;
   configPath: string;
   outDir: string;
   /** Write the verified patches into the working tree (no git). */
@@ -57,12 +60,12 @@ export async function runCi(opts: CiOptions): Promise<CiResult> {
 
   log("\n[2/4] evidence report");
   const reportPath = join(outDir, "report.md");
-  const { scan } = writeReport({ scanDir: join(outDir, "before"), fixPath: join(outDir, "fix.json"), outPath: reportPath });
+  const { scan } = writeReport({ scanDir: join(outDir, "before"), fixPath: join(outDir, "fix.json"), outPath: reportPath, lang: opts.lang });
   log(`wrote ${reportPath}`);
 
   log("\n[3/4] PR description");
   const prBody = join(outDir, "pr-body.md");
-  const summary = renderSummary(scan, { reportPath: "report.md" });
+  const summary = renderSummary(scan, { reportPath: "report.md", lang: opts.lang });
   writeFileSync(prBody, summary);
   log(`wrote ${prBody}`);
 

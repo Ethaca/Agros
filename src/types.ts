@@ -62,6 +62,10 @@ const Sha256 = z.string().regex(/^[0-9a-f]{64}$/);
  * out/scan-meta.json: raw material for the report's evidence header (SPEC V2).
  * Hashes pin files, they do not prevent tampering. No absolute paths, no secrets.
  */
+/** Evidence report language. */
+export const ReportLang = z.enum(["en", "ko"]);
+export type ReportLang = z.infer<typeof ReportLang>;
+
 export const ScanMeta = z.strictObject({
   tool: z.strictObject({ name: z.literal("argos"), version: z.string() }),
   startedAt: z.string(),
@@ -70,6 +74,8 @@ export const ScanMeta = z.strictObject({
   /** Name of the directory holding the config (identifies the target in a report). */
   target: z.string(),
   mode: z.enum(["report", "block"]),
+  /** Language of the evidence report (config `report.lang`). Absent in scans written before the option existed: treated as "en". */
+  reportLang: ReportLang.optional(),
   /** How the target ran. "process" = host process (trusted code only); "container" = no network, read-only FS, non-root. */
   isolation: z.enum(["process", "container"]),
   /** Container image (null for process isolation). */

@@ -262,9 +262,9 @@ describe("demo scenarios", { skip }, () => {
         assert.ok(m, file);
         assert.equal(m![1], sha(join(r.out, file)).slice(0, 16), `${file} header hash is current`);
       }
-      assert.match(md, /\| 대상 \| vendor-platform \|/);
-      assert.match(md, /보증하거나 규정 준수를 증명하지 않는다/);
-      assert.match(md, /무결성:\*\* matrix\.json ✅ 일치 · findings\.json ✅ 일치/);
+      assert.match(md, /\| Target \| vendor-platform \|/);
+      assert.match(md, /does not guarantee security or prove compliance/);
+      assert.match(md, /Integrity:\*\* matrix\.json ✅ match · findings\.json ✅ match/);
     });
 
     it("a result file edited after the scan is refused (exit 1), not reported", () => {
@@ -287,9 +287,9 @@ describe("demo scenarios", { skip }, () => {
       assert.equal(r.status, 0, r.stderr);
       for (const f of ["report.md", "pr-body.md", "ci-summary.json", "fix.json", "before/findings.json", "after/findings.json"]) assert.ok(existsSync(join(out, f)), f);
       const md = readFileSync(join(out, "report.md"), "utf8");
-      assert.match(md, /✅ 채택: limit columns/);
-      assert.match(md, /✅ 채택: scope GET \/api\/datasets\/:id/);
-      assert.match(md, /⚠️ 거부: scope POST \/api\/export/);
+      assert.match(md, /✅ adopted: limit columns/);
+      assert.match(md, /✅ adopted: scope GET \/api\/datasets\/:id/);
+      assert.match(md, /⚠️ rejected: scope POST \/api\/export/);
       const s = JSON.parse(readFileSync(join(out, "ci-summary.json"), "utf8"));
       assert.equal(s.patches.adopted, 2);
       assert.equal(s.pr, null);
@@ -311,8 +311,8 @@ describe("demo scenarios", { skip }, () => {
       const patched = lab.git("show", `${branch}:app.mjs`);
       assert.match(patched, /SELECT id, name, contact_email FROM vendors/);
       assert.match(patched, /WHERE id = \? AND vendor_id = \?"\)\s*\.get\(req\.params\.id, req\.user\.vendor_id\)/);
-      assert.ok(lab.ghBody().includes("검증된 수정 2건"));
-      assert.match(lab.ghBody(), /보증하거나 규정 준수를 증명하지 않는다/);
+      assert.ok(lab.ghBody().includes("2 verified fixes"));
+      assert.match(lab.ghBody(), /does not guarantee security or prove compliance/);
       assert.equal(lab.ghCalls().length, 1);
     });
 
@@ -361,7 +361,7 @@ describe("demo scenarios", { skip }, () => {
       const out = join(dir, "o");
       const r = cli(["ci", "--config", join(dir, "argos.config.yaml"), "--out", out, "--isolation", "container"]);
       assert.equal(r.status, 0, r.stderr);
-      assert.match(readFileSync(join(out, "report.md"), "utf8"), /container \(`node:\d+-slim`: 네트워크 없음, 읽기 전용 루트, 비root\)/);
+      assert.match(readFileSync(join(out, "report.md"), "utf8"), /container \(`node:\d+-slim`: no network, read-only root, non-root\)/);
     });
   });
 
@@ -422,9 +422,9 @@ describe("demo scenarios", { skip }, () => {
       const r = cli(["ci", "--config", join(dir, "argos.config.yaml"), "--out", out]);
       assert.equal(r.status, 0, r.stderr);
       const md = readFileSync(join(out, "report.md"), "utf8");
-      assert.match(md, /미확인 기대 규칙 \d+개/);
-      assert.match(md, /✅ 채택: limit columns/);
-      assert.match(md, /✅ 채택: scope GET \/api\/datasets\/:id/);
+      assert.match(md, /\d+ unconfirmed expectations?/);
+      assert.match(md, /✅ adopted: limit columns/);
+      assert.match(md, /✅ adopted: scope GET \/api\/datasets\/:id/);
     });
 
     it("default isolation is the container: the draft is verified inside the sandbox", { skip: hasDocker() ? false : "docker not available" }, () => {

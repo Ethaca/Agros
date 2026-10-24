@@ -20,6 +20,12 @@ function parseIsolation(v?: string): "process" | "container" | undefined {
   return v;
 }
 
+function parseLang(v?: string): "en" | "ko" | undefined {
+  if (v === undefined) return undefined;
+  if (v !== "en" && v !== "ko") throw new ConfigError(`--lang: expected "en" or "ko", got "${v}"`);
+  return v;
+}
+
 const isUserError = (e: unknown): boolean =>
   e instanceof ConfigError || e instanceof RunnerError || e instanceof ScanError || e instanceof SeedError || e instanceof ReportError || e instanceof PrError || e instanceof InitError;
 
@@ -144,10 +150,11 @@ program
   .option("--scan <dir>", "directory with matrix.json, findings.json, scan-meta.json", "out")
   .option("--fix <path>", "fix.json from `argos fix`/`argos ci` (default: <scan>/fix.json or <scan>/../fix.json)")
   .option("--out <path>", "report file (default: <scan>/report.md)")
-  .action((o: { scan: string; fix?: string; out?: string }) => {
+  .option("--lang <lang>", "en | ko (default: config report.lang recorded by the scan, else en)")
+  .action((o: { scan: string; fix?: string; out?: string; lang?: string }) => {
     try {
       const fixPath = o.fix ?? [join(o.scan, "fix.json"), join(dirname(o.scan), "fix.json")].find((p) => existsSync(p));
-      const r = writeReport({ scanDir: o.scan, fixPath, outPath: o.out ?? join(o.scan, "report.md") });
+      const r = writeReport({ scanDir: o.scan, fixPath, outPath: o.out ?? join(o.scan, "report.md"), lang: parseLang(o.lang) });
       console.log(`wrote ${r.path}`);
     } catch (e) {
       if (isUserError(e)) {
@@ -167,10 +174,11 @@ program
   .option("--apply", "write the verified patches into the working tree")
   .option("--pr", "push a NEW branch with the verified patches and open a PR (default: on in CI, off locally)")
   .option("--no-pr", "never open a PR, even in CI")
+  .option("--lang <lang>", "report and PR summary language: en | ko (default: config report.lang)")
   .option("--base <branch>", "branch the PR targets (default in GitHub Actions: the PR's source branch or the pushed branch; else the current branch)")
-  .action(async (o: { config: string; out: string; timeout: string; isolation?: string; apply?: boolean; pr?: boolean; base?: string }) => {
+  .action(async (o: { config: string; out: string; timeout: string; isolation?: string; apply?: boolean; pr?: boolean; base?: string; lang?: string }) => {
     try {
-      const r = await runCi({ configPath: o.config, outDir: o.out, timeoutMs: Number(o.timeout) * 1000, isolation: parseIsolation(o.isolation), apply: !!o.apply, pr: o.pr, base: o.base });
+      const r = await runCi({ configPath: o.config, outDir: o.out, timeoutMs: Number(o.timeout) * 1000, isolation: parseIsolation(o.isolation), apply: !!o.apply, pr: o.pr, base: o.base, lang: parseLang(o.lang) });
       process.exitCode = r.exitCode;
     } catch (e) {
       if (isUserError(e)) {

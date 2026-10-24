@@ -64,3 +64,13 @@ test("matrix contract schema accepts the SPEC example", () => {
   });
   assert.equal(m.cells[0]!.verdict, "VULNERABLE");
 });
+
+test("report.lang defaults to en, accepts ko, rejects anything else", () => {
+  assert.equal(parseConfig(example()).report.lang, "en");
+  const ko = example();
+  ko.report = { lang: "ko" };
+  assert.equal(parseConfig(ko).report.lang, "ko");
+  const bad = example();
+  bad.report = { lang: "fr" };
+  assert.throws(() => parseConfig(bad), /report\.lang/);
+});

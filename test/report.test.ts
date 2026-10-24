@@ -5,12 +5,13 @@ import { cpSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { LIMITS_STATEMENT, ReportError, loadScan, renderReport, renderSummary, writeReport } from "../src/report.js";
+import { LIMITS, ReportError, loadScan, renderReport, renderSummary, writeReport } from "../src/report.js";
 import type { FixReport } from "../src/fix/index.js";
 
 const EX = "examples/out";
 const sha = (p: string) => createHash("sha256").update(readFileSync(p, "utf8")).digest("hex");
 const scan = () => loadScan({ scanDir: EX });
+const KO = { lang: "ko" as const };
 const copy = (): string => {
   const d = mkdtempSync(join(tmpdir(), "argos-rep-"));
   cpSync(EX, d, { recursive: true });
@@ -18,18 +19,18 @@ const copy = (): string => {
 };
 
 test("report has the evidence header, scope, summary, matrix, per-check results and the limits statement", () => {
-  const md = renderReport(scan());
+  const md = renderReport(scan(), KO);
   for (const h of ["## 증빙 헤더", "## 요약", "## 🔴 취약 항목", "## 접근 매트릭스", "## 점검별 결과", "## 한계"]) assert.ok(md.includes(h), h);
   assert.match(md, /\| 대상 \| vendor-platform \|/);
   assert.match(md, /\| 점검 \| bola, unauth, sqli, secrets \|/);
   assert.match(md, /시험한 범위.*시험하지 않았다/);
   assert.match(md, /`GET \/api\/datasets\?search=`/);
-  assert.ok(md.includes(LIMITS_STATEMENT), "V3 limits wording is mandatory");
+  assert.ok(md.includes(LIMITS.ko), "V3 limits wording is mandatory");
   assert.match(md, /보증하거나 규정 준수를 증명하지 않는다/);
 });
 
 test("header hashes match the files recomputed from disk (acceptance criterion 3)", () => {
-  const md = renderReport(scan());
+  const md = renderReport(scan(), KO);
   for (const [label, file] of [["matrix.json", "matrix.json"], ["findings.json", "findings.json"]] as const) {
     const m = new RegExp(`\\| ${label} \\| SHA-256 \`([0-9a-f]{16})…\``).exec(md);
     assert.ok(m, label);
@@ -68,9 +69,9 @@ test("the report carries no full marker, secret, canary, or host path", () => {
 
 test("isolation is stated: process warns, container names the image", () => {
   const s = scan();
-  assert.match(renderReport(s), /process — \*\*격리 없음/);
+  assert.match(renderReport(s, KO), /process — \*\*격리 없음/);
   const boxed = { ...s, meta: { ...s.meta, isolation: "container" as const, image: "node:25-slim" } };
-  const md = renderReport(boxed);
+  const md = renderReport(boxed, KO);
   assert.match(md, /container \(`node:25-slim`: 네트워크 없음, 읽기 전용 루트, 비root\)/);
   assert.ok(!md.includes("이 실행은 격리 없이"));
 });
@@ -87,7 +88,7 @@ const FIX: FixReport = {
 };
 
 test("fix section lists adopted patches with the diff, rejections with reasons, guidance", () => {
-  const md = renderReport({ ...scan(), fix: FIX });
+  const md = renderReport({ ...scan(), fix: FIX }, KO);
   assert.match(md, /## 수정과 재검증/);
   assert.match(md, /✅ 채택: limit columns/);
   assert.match(md, /`SELECT \* FROM vendors`/);
@@ -98,7 +99,7 @@ test("fix section lists adopted patches with the diff, rejections with reasons, 
 });
 
 test("PR summary is short, lists remaining reds, and keeps the limits statement", () => {
-  const md = renderSummary({ ...scan(), fix: FIX }, { reportPath: "report.md" });
+  const md = renderSummary({ ...scan(), fix: FIX }, { reportPath: "report.md", ...KO });
   assert.ok(md.split("\n").length < 40, "bounded length");
   assert.match(md, /검증된 수정 1건/);
   assert.match(md, /남은 🔴 25건/);
@@ -111,4 +112,25 @@ test("writeReport writes the file", () => {
   const out = join(mkdtempSync(join(tmpdir(), "argos-rep-")), "nested", "report.md");
   const r = writeReport({ scanDir: EX, outPath: out });
   assert.equal(readFileSync(out, "utf8"), r.markdown);
+});
+
+test("English is the default; config report.lang (recorded in scan-meta) and --lang choose the language", () => {
+  const s = scan();
+  assert.equal(s.meta.reportLang, "en", "argos scan records config report.lang (default en)");
+  const legacy = { ...s, meta: { ...s.meta, reportLang: undefined } };
+  assert.match(renderReport(legacy), /## Evidence header/, "scans from before the option read as English");
+  const en = renderReport({ ...s, fix: FIX });
+  for (const h of ["## Evidence header", "## Summary", "## 🔴 Vulnerable", "## Access matrix", "## Results by check", "## Fix and re-verification", "## Limits"]) assert.ok(en.includes(h), h);
+  assert.ok(en.includes(LIMITS.en));
+  assert.match(en, /matrix\.json ✅ match · findings\.json ✅ match/);
+  assert.match(en, /✅ adopted: limit columns/);
+  assert.doesNotMatch(en, /[가-힣]/, "no Korean left in the English report");
+  const summary = renderSummary({ ...s, fix: FIX }, { reportPath: "report.md" });
+  assert.match(summary, /\*\*1 verified fix\*\*/);
+  assert.match(summary, /\*\*25 🔴 remaining\*\*/);
+  assert.doesNotMatch(summary, /[가-힣]/);
+
+  const ko = { ...s, meta: { ...s.meta, reportLang: "ko" as const } };
+  assert.match(renderReport(ko), /## 증빙 헤더/, "config report.lang: ko");
+  assert.match(renderReport(ko, { lang: "en" }), /## Evidence header/, "--lang overrides the config");
 });
