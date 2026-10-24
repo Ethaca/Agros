@@ -1,0 +1,16 @@
+@import "tailwindcss" source("../");
+
+/* Base UI 문서의 모습: 흰 바탕, 얇은 회색 테두리, 검정 기본 버튼. 색은 상태(위험도·신뢰도)를 나타낼 때만 쓴다 */
+@theme {
+  --font-sans: "Pretendard Variable", Pretendard, "Inter", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@layer base {
+  html { color-scheme: light; }
+  /* iOS Safari 에서 팝업 배경(backdrop)이 스크롤 뒤에도 덮이도록 (Base UI 권장 설정) */
+  /* 한국어는 단어 중간에서 줄을 바꾸지 않는다 */
+  body { @apply relative bg-white font-sans text-gray-900 antialiased; word-break: keep-all; overflow-wrap: break-word; }
+  code, pre, textarea { @apply font-mono; }
+  pre { @apply overflow-auto rounded-md border border-gray-200 bg-gray-50 p-3 text-[13px] leading-6 text-gray-800; }
+}

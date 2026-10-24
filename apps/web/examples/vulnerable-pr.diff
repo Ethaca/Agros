@@ -1,0 +1,64 @@
+diff --git a/src/routes/orders.ts b/src/routes/orders.ts
+index 3f2a1c0..9b8e7d4 100644
+--- a/src/routes/orders.ts
++++ b/src/routes/orders.ts
+@@ -1,20 +1,46 @@
+ import { Router } from 'express';
+ import { Order, User } from '../models';
+-import { requireAuth, rateLimit } from '../middleware';
++import { rateLimit } from '../middleware';
+ 
+ const router = Router();
+ 
+-router.get('/orders', requireAuth, async (req, res) => {
++router.get('/orders', async (req, res) => {
++  const limit = parseInt(req.query.limit as string);
+-  const orders = await Order.find({ ownerId: req.user.id }).limit(50);
++  const orders = await Order.find({ ownerId: req.user.id }).limit(limit);
+   res.json(orders);
+ });
+ 
++// 주문 상세 조회
++router.get('/orders/:orderId', async (req, res) => {
++  const order = await Order.findById(req.params.orderId);
++  if (!order) return res.status(404).end();
++  res.json(order);
++});
++
++// 주문 수정
++router.patch('/orders/:orderId', async (req, res) => {
++  const order = await Order.findByIdAndUpdate(req.params.orderId, req.body, { new: true });
++  res.json(order);
++});
++
++router.post('/admin/users/:id/refund', async (req, res) => {
++  if (req.headers['x-role'] !== 'admin') return res.status(403).end();
++  const user = await User.findById(req.params.id);
++  res.json(user);
++});
++
++router.post('/webhooks/preview', async (req, res) => {
++  const r = await fetch(req.body.url);
++  res.send(await r.text());
++});
++
++router.use((err, req, res, next) => {
++  res.status(500).json({ message: err.message, stack: err.stack });
++});
++
+ export default router;
+diff --git a/src/auth.ts b/src/auth.ts
+index 1111111..2222222 100644
+--- a/src/auth.ts
++++ b/src/auth.ts
+@@ -1,8 +1,9 @@
+ import jwt from 'jsonwebtoken';
++const JWT_SECRET = 'secret';
+ 
+ export function currentUser(token: string) {
+-  return jwt.verify(token, process.env.JWT_SECRET!, { algorithms: ['RS256'] });
++  return jwt.decode(token);
+ }
+ 
+-export const db = new Pool({ ssl: true });
++export const db = new Pool({ ssl: { rejectUnauthorized: false } });

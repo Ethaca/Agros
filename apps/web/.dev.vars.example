@@ -1,0 +1,19 @@
+# 로컬 `npm run dev` (wrangler dev) 용. 복사해서 .dev.vars 로 저장.
+# 운영에서는 같은 이름으로 Cloudflare secret 을 등록한다 (README 참고).
+
+# GitHub OAuth App — callback: <PUBLIC_URL>/auth/github/callback
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+
+# Poe API (https://poe.com/api/keys) — 비워두면 정적 룰만으로 검사
+POE_API_KEY=
+
+# 세션 서명 / 토큰 암호화 키: `openssl rand -hex 32` 로 각각 생성
+SESSION_SECRET=
+ENCRYPTION_KEY=
+
+# 선택: 생략하면 접속한 origin 을 사용. 로컬에서 webhook 을 받으려면 터널 주소를 넣는다
+# PUBLIC_URL=https://xxxx.trycloudflare.com
+
+# 선택: Threat Radar 가 GitHub 권고를 수집할 때 쓰는 토큰 (권한 없이 public_repo 읽기면 충분). 없으면 시간당 60회 비인증 한도
+# RADAR_GITHUB_TOKEN=github_pat_...

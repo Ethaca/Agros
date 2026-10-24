@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # node:sqlite prints an ExperimentalWarning on stderr; silence it so the CLI
+    # stderr assertions in test/scan.test.ts stay stable.
+    env:
+      NODE_OPTIONS: --no-warnings
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck (workspace)
+        run: pnpm -r run typecheck
+
+      - name: Build web UI
+        run: pnpm -C apps/web run build:ui
+
+      - name: Test (workspace)
+        run: pnpm -r run test

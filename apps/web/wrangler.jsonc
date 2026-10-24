@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "argos",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // 화면: React + Headless UI 를 서버에서 그리고, 브라우저 번들과 Tailwind CSS 는 정적 자산으로 제공
+  "build": { "command": "npm run build:ui", "watch_dir": "src/ui" },
+  "assets": { "directory": "./public" },
+  // database_id / 큐는 첫 배포 때 wrangler 가 자동으로 생성한다
+  "d1_databases": [{ "binding": "DB", "database_name": "argos" }],
+  // Threat Radar: 10분마다 GHSA, 벤더 권고, Hacker News, KEV 수집
+  "triggers": { "crons": ["*/10 * * * *"] },
+  "queues": {
+    "producers": [{ "binding": "SCAN_QUEUE", "queue": "argos-scans" }],
+    "consumers": [{ "queue": "argos-scans", "max_batch_size": 1, "max_retries": 0 }]
+  },
+  // 민감하지 않은 설정. 비밀값(GITHUB_CLIENT_*, POE_API_KEY, SESSION_SECRET, ENCRYPTION_KEY)은 secret 으로 넣는다
+  "vars": {
+    "POE_MODEL": "claude-sonnet-5.5",
+    "FAIL_ON": "high",
+    "MIN_CONFIDENCE": "0.5",
+    "REPORT_LANG": "ko"
+  },
+  "observability": { "enabled": true }
+}

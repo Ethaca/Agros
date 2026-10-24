@@ -1,9 +1,11 @@
 #!/usr/bin/env tsx
+import { readFileSync, writeFileSync } from "node:fs";
 import { Command } from "commander";
-import { ConfigError } from "./config.js";
+import { ConfigError, loadConfig } from "./config.js";
 import { RunnerError } from "./runner.js";
 import { runScan, ScanError } from "./scan.js";
 import { SeedError } from "./seed.js";
+import { annotateConfig, bridgeFindings, parseArgosApiFindings, renderDraftConfig } from "./bridge.js";
 
 const program = new Command();
 program.name("argos").description("Prove, vouch, and plug access-control checks");
@@ -32,6 +34,42 @@ program
         console.error(`argos: ${e.message}`);
         process.exitCode = 1;
       } else throw e;
+    }
+  });
+program
+  .command("import-findings <file>")
+  .description("Turn Argos API (static) findings into Argos resources: draft a config, or annotate an existing one")
+  .option("--config <path>", "existing config to annotate instead of drafting a new one")
+  .option("--out <path>", "write the draft config here (default: stdout)")
+  .action((file: string, o: { config?: string; out?: string }) => {
+    try {
+      const findings = parseArgosApiFindings(JSON.parse(readFileSync(file, "utf8")));
+
+      if (o.config) {
+        const cfg = loadConfig(o.config);
+        const { matched, unmatchedFindings } = annotateConfig(cfg, findings);
+        console.log(`Argos API findings cross-referenced with ${o.config}:`);
+        if (!matched.length) console.log("  (no configured resource matched a finding's route)");
+        for (const m of matched) console.log(`  🔎 ${m.resourceId} (${m.route}) flagged by [${m.findingIds.join(", ")}] → argos scan will prove it`);
+        if (unmatchedFindings.length) console.log(`  not matched to a configured route: ${unmatchedFindings.join(", ")}`);
+        console.log(`\nRun: argos scan --config ${o.config}`);
+        return;
+      }
+
+      const bridged = bridgeFindings(findings);
+      const yaml = renderDraftConfig(bridged);
+      if (o.out) {
+        writeFileSync(o.out, yaml);
+        console.error(`wrote ${o.out} (${bridged.resources.length} resources, checks: ${bridged.checks.join(", ") || "none"})`);
+        if (bridged.unmapped.length) console.error(`${bridged.unmapped.length} finding(s) not executable by Argos yet (see comments in the file)`);
+        console.error("Complete the TODO fields, then: argos scan --config " + o.out);
+      } else {
+        process.stdout.write(yaml);
+      }
+    } catch (e) {
+      if (e instanceof ConfigError) console.error(`argos: ${e.message}`);
+      else console.error(`argos import-findings: ${(e as Error).message}`);
+      process.exitCode = 1;
     }
   });
 program.command("fix").description("Patch findings and re-run attacks").action(() => {

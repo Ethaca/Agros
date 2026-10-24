@@ -1,0 +1,315 @@
+{
+  "risk": "high",
+  "summary": "정적 룰 기반 검사 결과입니다 (LLM 미사용).",
+  "findings": [
+    {
+      "id": "F1",
+      "source": "static",
+      "ruleId": "bola-direct-object-lookup",
+      "file": "app.mjs",
+      "line": 142,
+      "evidence": "const row = db.prepare(\"SELECT * FROM datasets WHERE id = ?\").get(req.params.id);",
+      "severity": "high",
+      "category": "API1",
+      "title": "요청 파라미터의 ID 로 객체를 직접 조회/수정",
+      "description": "클라이언트가 보낸 ID 로 DB 객체를 조회·수정·삭제하면서 현재 사용자의 소유권(owner/tenant) 조건이 보이지 않습니다. 다른 사용자의 ID 를 넣으면 남의 데이터에 접근할 수 있습니다 (BOLA/IDOR).",
+      "recommendation": "조회 조건에 `ownerId: req.user.id` (또는 tenantId) 를 함께 걸거나, 조회 후 소유권을 검증하고 실패 시 404/403 을 반환하세요.",
+      "impact": {
+        "source": "rule",
+        "verificationStatus": "not_run",
+        "steps": [
+          {
+            "kind": "change",
+            "explanation": "요청 파라미터의 ID 로 객체를 직접 조회/수정",
+            "evidence": [
+              {
+                "file": "app.mjs",
+                "side": "after",
+                "line": 142,
+                "quote": "const row = db.prepare(\"SELECT * FROM datasets WHERE id = ?\").get(req.params.id);"
+              }
+            ]
+          },
+          {
+            "kind": "access",
+            "explanation": "다른 사용자나 테넌트의 ID를 지정한 요청이 대상 객체의 처리에 도달할 수 있습니다.",
+            "evidence": []
+          },
+          {
+            "kind": "consequence",
+            "explanation": "객체의 소유권이 다른 곳에서도 검사되지 않는다면, 타인의 데이터 조회·변경이 가능할 수 있습니다.",
+            "evidence": []
+          }
+        ],
+        "assumptions": [
+          "탐지된 패턴은 검토 후보입니다. 상위 미들웨어·호출 경로·배포 설정의 보호 여부는 별도로 확인해야 합니다."
+        ],
+        "saferAlternative": "조회 조건에 `ownerId: req.user.id` (또는 tenantId) 를 함께 걸거나, 조회 후 소유권을 검증하고 실패 시 404/403 을 반환하세요.",
+        "verification": [
+          "사용자 식별자를 body가 아닌 검증된 세션에서 얻는지 확인",
+          "조회뿐 아니라 수정·삭제에도 소유권 조건 적용",
+          "본인 요청 성공 + 타인 요청 거부를 함께 테스트"
+        ]
+      }
+    },
+    {
+      "id": "F2",
+      "source": "static",
+      "ruleId": "bola-direct-object-lookup",
+      "file": "app.mjs",
+      "line": 168,
+      "evidence": "const row = db.prepare(\"SELECT * FROM vendors WHERE id = ?\").get(req.params.id);",
+      "severity": "high",
+      "category": "API1",
+      "title": "요청 파라미터의 ID 로 객체를 직접 조회/수정",
+      "description": "클라이언트가 보낸 ID 로 DB 객체를 조회·수정·삭제하면서 현재 사용자의 소유권(owner/tenant) 조건이 보이지 않습니다. 다른 사용자의 ID 를 넣으면 남의 데이터에 접근할 수 있습니다 (BOLA/IDOR).",
+      "recommendation": "조회 조건에 `ownerId: req.user.id` (또는 tenantId) 를 함께 걸거나, 조회 후 소유권을 검증하고 실패 시 404/403 을 반환하세요.",
+      "impact": {
+        "source": "rule",
+        "verificationStatus": "not_run",
+        "steps": [
+          {
+            "kind": "change",
+            "explanation": "요청 파라미터의 ID 로 객체를 직접 조회/수정",
+            "evidence": [
+              {
+                "file": "app.mjs",
+                "side": "after",
+                "line": 168,
+                "quote": "const row = db.prepare(\"SELECT * FROM vendors WHERE id = ?\").get(req.params.id);"
+              }
+            ]
+          },
+          {
+            "kind": "access",
+            "explanation": "다른 사용자나 테넌트의 ID를 지정한 요청이 대상 객체의 처리에 도달할 수 있습니다.",
+            "evidence": []
+          },
+          {
+            "kind": "consequence",
+            "explanation": "객체의 소유권이 다른 곳에서도 검사되지 않는다면, 타인의 데이터 조회·변경이 가능할 수 있습니다.",
+            "evidence": []
+          }
+        ],
+        "assumptions": [
+          "탐지된 패턴은 검토 후보입니다. 상위 미들웨어·호출 경로·배포 설정의 보호 여부는 별도로 확인해야 합니다."
+        ],
+        "saferAlternative": "조회 조건에 `ownerId: req.user.id` (또는 tenantId) 를 함께 걸거나, 조회 후 소유권을 검증하고 실패 시 404/403 을 반환하세요.",
+        "verification": [
+          "사용자 식별자를 body가 아닌 검증된 세션에서 얻는지 확인",
+          "조회뿐 아니라 수정·삭제에도 소유권 조건 적용",
+          "본인 요청 성공 + 타인 요청 거부를 함께 테스트"
+        ]
+      }
+    },
+    {
+      "id": "F3",
+      "source": "static",
+      "ruleId": "bfla-admin-route-without-role-check",
+      "file": "app.mjs",
+      "line": 184,
+      "evidence": "app.get(\"/debug/env\", (req, res) => res.json(process.env));",
+      "severity": "high",
+      "category": "API5",
+      "title": "관리자/내부용 라우트에 역할 검사 없음",
+      "description": "`/admin`, `/internal`, `/debug` 등 특권 기능 라우트가 추가되었지만 역할(role) 기반 인가 체크가 보이지 않습니다.",
+      "recommendation": "`requireRole(\"admin\")`, `@PreAuthorize(\"hasRole('ADMIN')\")`, `Depends(require_admin)` 같은 함수 수준 인가를 적용하세요.",
+      "impact": {
+        "source": "rule",
+        "verificationStatus": "not_run",
+        "steps": [
+          {
+            "kind": "change",
+            "explanation": "관리자/내부용 라우트에 역할 검사 없음",
+            "evidence": [
+              {
+                "file": "app.mjs",
+                "side": "after",
+                "line": 184,
+                "quote": "app.get(\"/debug/env\", (req, res) => res.json(process.env));"
+              }
+            ]
+          },
+          {
+            "kind": "access",
+            "explanation": "필요한 역할이 없는 사용자의 요청이 특권 기능에 도달할 수 있습니다.",
+            "evidence": []
+          },
+          {
+            "kind": "consequence",
+            "explanation": "서버 측 기능 인가가 없다면 관리자 작업을 비인가 사용자가 실행할 수 있습니다.",
+            "evidence": []
+          }
+        ],
+        "assumptions": [
+          "탐지된 패턴은 검토 후보입니다. 상위 미들웨어·호출 경로·배포 설정의 보호 여부는 별도로 확인해야 합니다."
+        ],
+        "saferAlternative": "`requireRole(\"admin\")`, `@PreAuthorize(\"hasRole('ADMIN')\")`, `Depends(require_admin)` 같은 함수 수준 인가를 적용하세요.",
+        "verification": [
+          "역할의 출처가 서버 또는 검증된 클레임인지 확인",
+          "모든 특권 엔드포인트에 역할 검사 적용",
+          "관리자 성공 + 일반 사용자 거부 테스트"
+        ]
+      }
+    },
+    {
+      "id": "F4",
+      "source": "static",
+      "ruleId": "bola-id-route-without-ownership",
+      "file": "app.mjs",
+      "line": 140,
+      "evidence": "app.get(\"/api/datasets/:id\", auth, (req, res) => {",
+      "severity": "medium",
+      "category": "API1",
+      "title": "객체 ID 를 받는 신규 엔드포인트에 소유권 검증 흔적 없음",
+      "description": "경로에 객체 식별자(`:id`, `{id}`, `<int:pk>` 등)를 받는 라우트가 추가되었지만 근처에 소유권/권한 체크가 보이지 않습니다.",
+      "recommendation": "핸들러에서 리소스의 소유자와 인증된 사용자가 일치하는지 검증하세요. 정책 미들웨어(예: `authorizeResource`)로 일괄 적용하는 것을 권장합니다.",
+      "impact": {
+        "source": "rule",
+        "verificationStatus": "not_run",
+        "steps": [
+          {
+            "kind": "change",
+            "explanation": "객체 ID 를 받는 신규 엔드포인트에 소유권 검증 흔적 없음",
+            "evidence": [
+              {
+                "file": "app.mjs",
+                "side": "after",
+                "line": 140,
+                "quote": "app.get(\"/api/datasets/:id\", auth, (req, res) => {"
+              }
+            ]
+          },
+          {
+            "kind": "access",
+            "explanation": "다른 사용자나 테넌트의 ID를 지정한 요청이 대상 객체의 처리에 도달할 수 있습니다.",
+            "evidence": []
+          },
+          {
+            "kind": "consequence",
+            "explanation": "객체의 소유권이 다른 곳에서도 검사되지 않는다면, 타인의 데이터 조회·변경이 가능할 수 있습니다.",
+            "evidence": []
+          }
+        ],
+        "assumptions": [
+          "탐지된 패턴은 검토 후보입니다. 상위 미들웨어·호출 경로·배포 설정의 보호 여부는 별도로 확인해야 합니다."
+        ],
+        "saferAlternative": "핸들러에서 리소스의 소유자와 인증된 사용자가 일치하는지 검증하세요. 정책 미들웨어(예: `authorizeResource`)로 일괄 적용하는 것을 권장합니다.",
+        "verification": [
+          "사용자 식별자를 body가 아닌 검증된 세션에서 얻는지 확인",
+          "조회뿐 아니라 수정·삭제에도 소유권 조건 적용",
+          "본인 요청 성공 + 타인 요청 거부를 함께 테스트"
+        ]
+      }
+    },
+    {
+      "id": "F5",
+      "source": "static",
+      "ruleId": "bola-id-route-without-ownership",
+      "file": "app.mjs",
+      "line": 166,
+      "evidence": "app.get(\"/api/vendors/:id\", auth, (req, res) => {",
+      "severity": "medium",
+      "category": "API1",
+      "title": "객체 ID 를 받는 신규 엔드포인트에 소유권 검증 흔적 없음",
+      "description": "경로에 객체 식별자(`:id`, `{id}`, `<int:pk>` 등)를 받는 라우트가 추가되었지만 근처에 소유권/권한 체크가 보이지 않습니다.",
+      "recommendation": "핸들러에서 리소스의 소유자와 인증된 사용자가 일치하는지 검증하세요. 정책 미들웨어(예: `authorizeResource`)로 일괄 적용하는 것을 권장합니다.",
+      "impact": {
+        "source": "rule",
+        "verificationStatus": "not_run",
+        "steps": [
+          {
+            "kind": "change",
+            "explanation": "객체 ID 를 받는 신규 엔드포인트에 소유권 검증 흔적 없음",
+            "evidence": [
+              {
+                "file": "app.mjs",
+                "side": "after",
+                "line": 166,
+                "quote": "app.get(\"/api/vendors/:id\", auth, (req, res) => {"
+              }
+            ]
+          },
+          {
+            "kind": "access",
+            "explanation": "다른 사용자나 테넌트의 ID를 지정한 요청이 대상 객체의 처리에 도달할 수 있습니다.",
+            "evidence": []
+          },
+          {
+            "kind": "consequence",
+            "explanation": "객체의 소유권이 다른 곳에서도 검사되지 않는다면, 타인의 데이터 조회·변경이 가능할 수 있습니다.",
+            "evidence": []
+          }
+        ],
+        "assumptions": [
+          "탐지된 패턴은 검토 후보입니다. 상위 미들웨어·호출 경로·배포 설정의 보호 여부는 별도로 확인해야 합니다."
+        ],
+        "saferAlternative": "핸들러에서 리소스의 소유자와 인증된 사용자가 일치하는지 검증하세요. 정책 미들웨어(예: `authorizeResource`)로 일괄 적용하는 것을 권장합니다.",
+        "verification": [
+          "사용자 식별자를 body가 아닌 검증된 세션에서 얻는지 확인",
+          "조회뿐 아니라 수정·삭제에도 소유권 조건 적용",
+          "본인 요청 성공 + 타인 요청 거부를 함께 테스트"
+        ]
+      }
+    },
+    {
+      "id": "F6",
+      "source": "static",
+      "ruleId": "debug-or-legacy-endpoint",
+      "file": "app.mjs",
+      "line": 184,
+      "evidence": "app.get(\"/debug/env\", (req, res) => res.json(process.env));",
+      "severity": "low",
+      "category": "API9",
+      "title": "디버그/레거시 엔드포인트 추가",
+      "description": "`/debug`, `/test`, `/v0`, `/legacy` 같은 엔드포인트는 운영 환경에 남아 관리되지 않는 공격 표면이 되기 쉽습니다.",
+      "recommendation": "운영 빌드에서 제외하거나 인증 뒤로 숨기고, API 인벤토리에 등록하세요.",
+      "impact": {
+        "source": "rule",
+        "verificationStatus": "not_run",
+        "steps": [
+          {
+            "kind": "change",
+            "explanation": "디버그/레거시 엔드포인트 추가",
+            "evidence": [
+              {
+                "file": "app.mjs",
+                "side": "after",
+                "line": 184,
+                "quote": "app.get(\"/debug/env\", (req, res) => res.json(process.env));"
+              }
+            ]
+          },
+          {
+            "kind": "access",
+            "explanation": "기존 관리 범위 밖의 엔드포인트에 요청이 도달할 수 있습니다.",
+            "evidence": []
+          },
+          {
+            "kind": "consequence",
+            "explanation": "배포 여부와 접근 제어에 따라 관리되지 않는 API가 노출될 수 있습니다.",
+            "evidence": []
+          }
+        ],
+        "assumptions": [
+          "탐지된 패턴은 검토 후보입니다. 상위 미들웨어·호출 경로·배포 설정의 보호 여부는 별도로 확인해야 합니다."
+        ],
+        "saferAlternative": "운영 빌드에서 제외하거나 인증 뒤로 숨기고, API 인벤토리에 등록하세요.",
+        "verification": [
+          "배포된 라우트 목록과 관리 목록 비교",
+          "이전 버전·디버그 라우트의 보호 확인",
+          "운영 빌드에서 제거 또는 접근 거부 여부 확인"
+        ]
+      }
+    }
+  ],
+  "dismissed": [],
+  "llm": {
+    "used": false
+  },
+  "stats": {
+    "filesScanned": 1,
+    "filesSkipped": 0,
+    "durationMs": 12
+  }
+}
