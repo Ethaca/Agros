@@ -28,7 +28,13 @@ function cfg(env: Record<string, string> = {}, container: Record<string, unknown
   });
 }
 
-const containersLeft = (): string => spawnSync("docker", ["ps", "-aq", "--filter", "label=argos=1"], { encoding: "utf8" }).stdout.trim();
+// Node-path containers only: JVM runs (label argos.run=<id>) from test files running in parallel are not ours to count.
+const containersLeft = (): string =>
+  spawnSync("docker", ["ps", "-a", "--filter", "label=argos=1", "--format", '{{.ID}} {{.Label "argos.run"}}'], { encoding: "utf8" })
+    .stdout.split("\n")
+    .filter((l) => l.trim() && !l.trim().includes(" "))
+    .join("\n")
+    .trim();
 
 describe("container isolation", { skip }, () => {
   test("config: container is opt-in, with safe defaults", () => {
@@ -146,10 +152,14 @@ describe("container isolation", { skip }, () => {
     assert.equal(containersLeft(), "");
   });
 
-  test("removeStrayContainers cleans up labelled leftovers", () => {
-    spawnSync("docker", ["run", "-d", "--label", "argos=1", "--name", "argos-stray-test", defaultImage(), "sleep", "60"]);
+  test("removeStrayContainers cleans up labelled leftover containers and networks", () => {
+    // narrowed to this test's label so concurrently running test files keep their stacks
+    const label = "argos.stray-test=1";
+    spawnSync("docker", ["run", "-d", "--label", "argos=1", "--label", label, "--name", "argos-stray-test", defaultImage(), "sleep", "60"]);
+    spawnSync("docker", ["network", "create", "--internal", "--label", "argos=1", "--label", label, "argos-stray-test-net"]);
     assert.ok(containersLeft().length > 0);
-    assert.ok(removeStrayContainers() >= 1);
+    assert.ok(removeStrayContainers(label) >= 2);
     assert.equal(containersLeft(), "");
+    assert.equal(spawnSync("docker", ["network", "ls", "-q", "--filter", `label=${label}`], { encoding: "utf8" }).stdout.trim(), "");
   });
 });

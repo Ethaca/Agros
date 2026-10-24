@@ -78,10 +78,50 @@ export interface StartContainerOptions {
   spec: ContainerSpec;
 }
 
-/** Runs inside the container: pipes stdin/stdout to the app's loopback port. */
-const forwardScript = (port: number): string =>
-  `const s=require("net").connect(${port},"127.0.0.1");process.stdin.pipe(s);s.pipe(process.stdout);` +
+/** Runs inside the container: pipes stdin/stdout to `host:port` (the app's loopback port by default). */
+const forwardScript = (port: number, host = "127.0.0.1"): string =>
+  `const s=require("net").connect(${port},${JSON.stringify(host)});process.stdin.pipe(s);s.pipe(process.stdout);` +
   `s.on("error",()=>process.exit(1));s.on("close",()=>process.exit(0));`;
+
+export interface Forwarder {
+  hostPort: number;
+  close(): void;
+}
+
+/**
+ * Host loopback TCP forwarder: every connection runs `docker exec -i <container> node -e <pipe to host:port>`.
+ * `container` must have `node`; `host` is resolved inside it (the JVM path relays through a node sidecar to the app alias).
+ */
+export async function startForwarder(container: string, port: number, host = "127.0.0.1"): Promise<Forwarder> {
+  const execs = new Set<ChildProcess>();
+  const server: Server = createServer((sock: Socket) => {
+    const p = spawn("docker", ["exec", "-i", container, "node", "-e", forwardScript(port, host)], { stdio: ["pipe", "pipe", "ignore"] });
+    execs.add(p);
+    sock.pipe(p.stdin!);
+    p.stdout!.pipe(sock);
+    const done = () => {
+      execs.delete(p);
+      sock.destroy();
+      p.kill("SIGKILL");
+    };
+    sock.on("close", done);
+    sock.on("error", done);
+    p.on("exit", done);
+    p.stdin!.on("error", () => undefined);
+  });
+  await new Promise<void>((ok, fail) => {
+    server.once("error", fail);
+    server.listen(0, "127.0.0.1", ok);
+  });
+  const hostPort = (server.address() as { port: number }).port;
+  return {
+    hostPort,
+    close: () => {
+      server.close();
+      for (const p of execs) p.kill("SIGKILL");
+    },
+  };
+}
 
 export async function startContainer(o: StartContainerOptions): Promise<ContainerHandle> {
   const status = dockerStatus();
@@ -112,27 +152,8 @@ export async function startContainer(o: StartContainerOptions): Promise<Containe
     throw new RunnerError(`docker run failed: ${firstLine(run.stderr)}`);
   }
 
-  const execs = new Set<ChildProcess>();
-  const server: Server = createServer((sock: Socket) => {
-    const p = spawn("docker", ["exec", "-i", name, "node", "-e", forwardScript(o.appPort)], { stdio: ["pipe", "pipe", "ignore"] });
-    execs.add(p);
-    sock.pipe(p.stdin!);
-    p.stdout!.pipe(sock);
-    const done = () => {
-      execs.delete(p);
-      sock.destroy();
-      p.kill("SIGKILL");
-    };
-    sock.on("close", done);
-    sock.on("error", done);
-    p.on("exit", done);
-    p.stdin!.on("error", () => undefined);
-  });
-  await new Promise<void>((ok, fail) => {
-    server.once("error", fail);
-    server.listen(0, "127.0.0.1", ok);
-  });
-  const hostPort = (server.address() as { port: number }).port;
+  const fwd = await startForwarder(name, o.appPort);
+  const hostPort = fwd.hostPort;
 
   const exitCode = (): number | undefined => {
     const r = docker(["inspect", "-f", "{{.State.Status}}|{{.State.ExitCode}}", name], 10_000);
@@ -148,18 +169,22 @@ export async function startContainer(o: StartContainerOptions): Promise<Containe
   let stopped: Promise<void> | undefined;
   const stop = () =>
     (stopped ??= (async () => {
-      server.close();
-      for (const p of execs) p.kill("SIGKILL");
+      fwd.close();
       docker(["rm", "-f", name], 30_000);
     })());
 
   return { name, hostPort, exitCode, logs, stop };
 }
 
-/** Remove containers left behind by a crashed run (label argos=1). Returns how many were removed. */
-export function removeStrayContainers(): number {
-  const ls = docker(["ps", "-aq", "--filter", "label=argos=1"]);
+/**
+ * Remove containers and networks left behind by a crashed run (label argos=1). Returns how many were removed.
+ * Dependency cache volumes (label argos-cache=1) are intentionally kept. `label` narrows the sweep (e.g. argos.run=<id>).
+ */
+export function removeStrayContainers(label = "argos=1"): number {
+  const ls = docker(["ps", "-aq", "--filter", `label=${label}`]);
   const ids = ls.stdout.split("\n").filter(Boolean);
   if (ids.length) docker(["rm", "-f", ...ids], 60_000);
-  return ids.length;
+  const nets = docker(["network", "ls", "-q", "--filter", `label=${label}`]).stdout.split("\n").filter(Boolean);
+  if (nets.length) docker(["network", "rm", ...nets], 60_000);
+  return ids.length + nets.length;
 }
