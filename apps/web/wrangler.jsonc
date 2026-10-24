@@ -7,6 +7,8 @@
   // 화면: React + Headless UI 를 서버에서 그리고, 브라우저 번들과 Tailwind CSS 는 정적 자산으로 제공
   "build": { "command": "npm run build:ui", "watch_dir": "src/ui" },
   "assets": { "directory": "./public" },
+  // `wrangler preview` (Cloudflare git 연동 미리보기 배포)용. 비어 있어도 됨
+  "previews": {},
   // database_id / 큐는 첫 배포 때 wrangler 가 자동으로 생성한다
   "d1_databases": [{ "binding": "DB", "database_name": "argos" }],
   // Threat Radar: 10분마다 GHSA, 벤더 권고, Hacker News, KEV 수집
