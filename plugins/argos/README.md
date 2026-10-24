@@ -34,9 +34,9 @@ Claude Code에서:
 | 단계 | 하는 일 |
 |---|---|
 | 1. 준비 확인 | `gh` 설치·로그인·`workflow` 권한 확인 |
-| 2. 데모 앱 받기 | 내 계정에 `argos-demo` 레포 생성(기본 비공개), Actions가 PR을 만들 수 있게 레포 설정 켜기 |
-| 3. PR 올리기 | 정리처럼 보이지만 다른 벤더 데이터를 읽을 수 있게 하고 API 키를 노출하는 PR |
-| 4. Argos 실행 | Actions에서 앱을 Docker(네트워크 없음, 쓰기 토큰 없음)로 띄워 실제로 공격 (1~3분) |
+| 2. 데모 앱 받기 | Node.js 또는 Spring Boot 중 선택, 내 계정에 `argos-demo` 레포 생성(기본 비공개), Actions가 PR을 만들 수 있게 레포 설정 켜기 |
+| 3. PR 올리기 | 정리처럼 보이지만 권한 검사를 깨뜨리는 PR |
+| 4. Argos 실행 | Actions에서 앱을 Docker(네트워크 없음, 쓰기 토큰 없음)로 띄워 실제로 공격 |
 | 5. 리포트 받기 | 리포트 PR 요약, 보고서를 `./argos-demo-report.md`로 저장 |
 | 6. 정리 | 데모 레포 삭제(`delete_repo` 권한 필요) |
 
@@ -46,7 +46,7 @@ Claude Code에서:
 
 ```bash
 bash demo.sh check
-bash demo.sh create --lang ko          # <내 계정>/argos-demo, --public 이면 공개
+bash demo.sh create --stack node --lang ko   # 또는 --stack spring. <내 계정>/argos-demo, --public 이면 공개
 bash demo.sh pr
 bash demo.sh watch
 bash demo.sh report --save argos-demo-report.md
@@ -61,19 +61,21 @@ bash demo.sh cleanup
 |---|---|
 | `skills/demo/SKILL.md` | `/argos:demo` 안내 절차 |
 | `demo.sh` | 각 단계를 실행하는 스크립트 (`git`, `gh`만 사용) |
-| `template/` | 데모 레포 내용. 멀티테넌트 API(벤더는 자기 데이터만 본다), 의존성 없음. `argos.config.yaml`은 사람이 확인한 규칙(누가 무엇을 읽을 수 있나) |
-| `vulnerable.patch` | 데모 PR. ① 데이터셋 조회에서 vendor 조건 제거(BOLA) ② 벤더 프로필을 `SELECT *`로 반환(API 키 노출) |
+| `template/node/` | 데이터 라벨링 멀티테넌트 API(벤더는 자기 데이터만 본다). 의존성 없음(Argos CI는 검사 대상의 `npm install`을 실행하지 않는다). `argos.config.yaml`은 사람이 확인한 규칙 |
+| `patches/node.patch` | Node 데모 PR. ① 데이터셋 조회에서 vendor 조건 제거(BOLA) ② 벤더 프로필을 `SELECT *`로 반환(API 키 노출) |
+| `template/spring/` | 협업 문서 서비스: Spring Boot 3.5 + Security(JWT) + JPA + PostgreSQL + Flyway(Gradle). Argos 설정 없음: Argos가 코드에서 초안을 만든다. `test/fixtures/spring/gradle-app`의 복사본 |
+| `patches/spring.patch` | Spring 데모 PR. ① 프로젝트 조회에서 조직 조건 제거 ② 문서 조회에서 작성자 조건 제거 ③ `/api/admin/**` 관리자 규칙 제거. 적용 결과는 `demo/spring-workspace`와 같다 |
 
-데모 레포의 `.github/workflows/argos.yml`은 `create`가 Argos 저장소의 `examples/github-workflow.yml`을 **고정된 커밋**(`demo.sh`의 `ARGOS_TOOL_REF`)에서 받아 만든다. 워크플로와 Argos 도구 버전이 항상 같다.
+데모 레포의 `.github/workflows/argos.yml`은 `create`가 Argos 저장소의 `examples/github-workflow.yml`을 **고정된 커밋**(`demo.sh`의 `ARGOS_TOOL_REF`)에서 받아 만든다. 워크플로와 Argos 도구 버전이 항상 같다. 복사본(`template/spring`, `patches/spring.patch`)이 원본과 달라지면 `test/demo-plugin.test.ts`가 실패한다.
 
-## 결과 (실제 GitHub에서 실행)
+## 결과
 
-| 대상 | 결과 |
-|---|---|
-| `main` (안전한 기준) | 🔴 0 · 🟢 45 |
-| 데모 PR | 🔴 12 (다른 벤더 데이터셋 읽기 6, 프로필의 API 키 노출 6) → 검증된 수정 후 🔴 0 |
+| 스택 | `main` (안전한 기준) | 데모 PR | 리포트 PR |
+|---|---|---|---|
+| Node | 🔴 0 · 🟢 45 | 🔴 12 (다른 벤더 데이터셋 읽기 6, 프로필의 API 키 노출 6) | 검증된 수정 포함, 🔴 12 → 0 (실제 GitHub, 약 1분) |
+| Spring | 🔴 0 · 🟢 186 | 🔴 45 (다른 조직 접근, 동료 문서 접근, 멤버의 관리자 기능 사용) | 리포트 + 설정 초안, 자동 수정 없음 (실제 GitHub, 약 4분) |
 
-리포트 PR(`argos/report-feature-vendor-dashboard` → `feature/vendor-dashboard`)에는 `.argos/report.md`(쉬운 설명), `.argos/evidence.md`(기술 증빙), 수정 커밋이 들어 있다.
+리포트 PR(`argos/report-<PR 브랜치>` → PR 브랜치)에는 `.argos/report.md`(쉬운 설명), `.argos/evidence.md`(기술 증빙)가 들어 있다. Node는 수정 커밋, Spring은 Argos가 만든 `argos.config.yaml` 초안도 함께 들어 있다.
 
 ## 참고
 

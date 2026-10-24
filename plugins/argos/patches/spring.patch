@@ -1,0 +1,41 @@
+diff --git a/src/main/java/com/acme/workspace/config/SecurityConfig.java b/src/main/java/com/acme/workspace/config/SecurityConfig.java
+index 284a66b..d0a9cc8 100644
+--- a/src/main/java/com/acme/workspace/config/SecurityConfig.java
++++ b/src/main/java/com/acme/workspace/config/SecurityConfig.java
+@@ -24,7 +24,6 @@ public class SecurityConfig {
+                 .authorizeHttpRequests(auth -> auth
+                         .requestMatchers(HttpMethod.GET, "/healthz").permitAll()
+                         .requestMatchers("/error").permitAll()
+-                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                         .requestMatchers("/api/**").authenticated()
+                         .anyRequest().denyAll())
+                 .oauth2ResourceServer(oauth2 -> oauth2
+diff --git a/src/main/java/com/acme/workspace/service/DocumentService.java b/src/main/java/com/acme/workspace/service/DocumentService.java
+index 7deb707..3fb2c38 100644
+--- a/src/main/java/com/acme/workspace/service/DocumentService.java
++++ b/src/main/java/com/acme/workspace/service/DocumentService.java
+@@ -43,7 +43,7 @@ public class DocumentService {
+     }
+ 
+     public Document get(AppUser caller, Long projectId, UUID documentId) {
+-        return documents.findByIdAndProjectIdAndOrgIdAndOwnerId(documentId, projectId, caller.getOrgId(), caller.getId())
++        return documents.findByIdAndProjectIdAndOrgId(documentId, projectId, caller.getOrgId())
+                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+     }
+ 
+diff --git a/src/main/java/com/acme/workspace/service/ProjectService.java b/src/main/java/com/acme/workspace/service/ProjectService.java
+index 2c0453f..9fc6e4d 100644
+--- a/src/main/java/com/acme/workspace/service/ProjectService.java
++++ b/src/main/java/com/acme/workspace/service/ProjectService.java
+@@ -25,9 +25,9 @@ public class ProjectService {
+         return projects.findByOrgIdAndNameContainingIgnoreCase(caller.getOrgId(), q == null ? "" : q, pageable);
+     }
+ 
+-    /** Loads a project that belongs to the caller's organization, or 404. */
++    /** Loads a project by id, or 404. */
+     public Project get(AppUser caller, Long projectId) {
+-        return projects.findByIdAndOrgId(projectId, caller.getOrgId())
++        return projects.findById(projectId)
+                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+     }
+ 

@@ -1,5 +1,5 @@
 /**
- * GitHub Actions demo (plugins/argos, the `/argos:demo` plugin): the template repo must stay clean, the demo PR (vulnerable.patch) must
+ * GitHub Actions demo (plugins/argos, the `/argos:demo` plugin): the template repo must stay clean, the Node demo PR (patches/node.patch) must
  * turn red on exactly its two planted flaws, and the verified fix must close both. Guards the story the demo tells.
  * The template has no dependencies, so this runs without `npm install`. Process isolation: the template is ours.
  */
@@ -15,14 +15,14 @@ const DEMO = join(ROOT, "plugins", "argos");
 
 function template(): string {
   const dir = mkdtempSync(join(tmpdir(), "argos-scn-gh-demo-"));
-  cpSync(join(DEMO, "template"), dir, { recursive: true });
+  cpSync(join(DEMO, "template", "node"), dir, { recursive: true });
   return dir;
 }
 
 function demoPr(): string {
   const dir = template();
-  const r = spawnSync("git", ["apply", join(DEMO, "vulnerable.patch")], { cwd: dir, encoding: "utf8" });
-  assert.equal(r.status, 0, `vulnerable.patch no longer applies to the template: ${r.stderr}`);
+  const r = spawnSync("git", ["apply", join(DEMO, "patches", "node.patch")], { cwd: dir, encoding: "utf8" });
+  assert.equal(r.status, 0, `patches/node.patch no longer applies to the template: ${r.stderr}`);
   return dir;
 }
 
