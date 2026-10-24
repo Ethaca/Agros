@@ -15,12 +15,12 @@
 ## 현재 구현
 | 단계 | 상태 | 비고 |
 |---|---|---|
-| CI 트리거 / 워크플로 예시 | ⬜ | `examples/argos.yml` 없음 |
+| CI 트리거 / 워크플로 예시 | ✅ | `examples/github-workflow.yml`: prepare(읽기 전용) / publish(쓰기) 두 job. 실제 GitHub에서는 아직 실행해 보지 않음 |
 | ① 정적 탐지 | 🔶 | `init`의 라우트·스키마·인증·소유 컬럼 탐지(express-sqlite)와 하드코딩 비밀 스캔. 역할 규칙(코드 밖 근거)은 아직 |
 | ② 설정 정의 | 🔶 | `argos init` v1(정적 규칙)으로 설정 초안·기동 검증 가능. LLM 판단과 `--update`는 아직(설계: `12-init.md`) |
 | ③ 동적 탐지 | ✅ | 점검 4종, 프로세스/컨테이너 격리 |
 | ④ 수정 건 탐지 | ✅ | 열 제한·소유자 검사 자동 수정, 나머지는 지침 |
-| ⑤ PR 생성 | 🔶 | `argos ci --pr`: 브랜치·커밋·push·`gh pr create`. **본문은 아직 기술 용어 중심**(비개발자용 문장 없음) |
+| ⑤ PR 생성 | 🔶 | 설정 있는 저장소: `argos ci --pr`(수정 PR). 설정 없는 저장소: `argos ci prepare` → `argos ci publish`(설정 초안·쉬운 보고서·검증된 수정을 `argos/report-<브랜치>` 한 PR로, 아래). 본문 문장은 템플릿(LLM 다듬기 없음) |
 | ⑥ 보고서 | ✅ | `argos report`, `ci`가 `out/report.md`를 만든다. 첫 버전은 B가 작성(A 구현이 들어오면 교체 가능, 입력 계약은 `out/` 세 파일) |
 
 `argos ci`: 점검 전부 → 수정 검증 → `out/report.md`, `out/pr-body.md`, `out/ci-summary.json` → (수정이 있으면) **새 브랜치를 만들어 PR**. 종료 코드는 **원본 코드** 기준(`block`이고 🔴이 있으면 2): PR에 수정이 있어도 main이 안전해지는 것은 아니다.
@@ -60,10 +60,31 @@ PR 본문과 보고서 상단에 **전문 용어 없이** 다음을 담는다: �
 | 브랜치 보호·서명 커밋 요구 같은 조직 정책 | push·PR이 막힐 수 있다 |
 | GitHub App 방식 | App에 Contents/Pull requests 쓰기 권한을 주므로 위 설정이 필요 없고 트리거 문제도 없다 |
 
-**권한 분리:** 고객 코드를 실행하는 검사 job은 `contents: read` + `persist-credentials: false`로, 게시 job만 쓰기 권한을 갖게 한다. 그러려면 검사와 게시를 나누는 `argos publish`가 필요하다(로드맵).
+**권한 분리:** 고객 코드를 실행하는 검사 job은 `contents: read` + `persist-credentials: false`로, 게시 job만 쓰기 권한을 갖게 한다. `argos ci prepare` / `argos ci publish`로 구현했다(아래). 위 세 조건(권한 명시, 저장소 설정, `GH_TOKEN`)은 publish job에 그대로 적용된다.
+
+## 설정 없는 저장소: `argos ci prepare` → `argos ci publish`
+고객이 `argos.config.yaml`을 쓰지 않아도 CI가 전용 브랜치와 보고 PR을 만든다(SPRING_SUPPORT_PLAN "CI 연결"). 두 명령, 두 신뢰 수준으로 나눈다.
+
+```
+prepare (고객 코드 실행, 쓰기 자격증명 없음)            publish (쓰기 토큰, 고객 코드 실행 없음)
+  쓰기 자격증명 제거(GITHUB_TOKEN, GH_TOKEN, ...)        artifact 검증(스키마·경로·패치·비밀·마커)
+  재귀 가드(argos/ 브랜치, Argos-Result 트레일러)        작업 트리 없는 임시 저장소에 git 객체만 fetch
+  설정 없음 → runInit(Spring/Node, verify 생략)         커밋 1: 설정 초안 + .argos/ 보고서
+  runFix: 스캔 + 같은 설정으로 수정 재검증(컨테이너)     커밋 2: 검증된 수정(fix.patch, git apply --cached)
+  정책 고정 가드(아래) → fix.patch                       argos/report-<브랜치>에 force-with-lease push
+  artifact: pr.json, body.md, files/, fix.patch          PR 생성 또는 숨은 마커로 찾은 기존 PR 수정
+```
+
+- **항상 PR이 남는다.** 설정이 이미 있으면 그대로 쓰고(재생성하지 않음, 사람이 확인한 규칙 보호), 없으면 init이 만든 AI 초안을 커밋한다. 미지원 스택·init 실패·빌드/기동 실패여도 상태(`unsupported`/`failed`)와 이유를 담은 보고서 PR을 만든다. 상태: `verified`(전부 실행) / `partial`(미검증 범위나 설정에 넣지 않은 경로가 있음) / `failed` / `unsupported` / `skipped`(재귀).
+- **보고서(`.argos/report.md`, 언어는 설정 `report.lang`(기본 en) 또는 `--lang`, 문구는 `src/ci-text.ts`의 en/ko 표).** 무엇이 문제였나(발견을 템플릿 문장으로 + 근거 요청·상태·마커 앞 6자), 수정과 재검증(전후 🔴 수), **발견한 API 전체 대비 실행/실행 못함/설정에 넣지 않음**, "확인되지 않은 정책(취약점 아님)", "환경 오류·미검증(취약점 아님)", 사람이 할 일. 기술 증빙은 `.argos/evidence.md`, 초안 근거는 `.argos/init-report.md`, 기계용 요약은 `.argos/result.json`. 고객 코드에서 나온 오류는 첫 줄만 싣고 비밀 패턴을 지운다(로그 꼬리는 싣지 않음).
+- **정책 고정 가드.** 수정 재검증은 같은 설정 파일·같은 매트릭스로만 한다. 수정 전후로 설정의 `mode/checks/personas/resources/auth/seed/db/provenance` 중 하나라도 달라지거나, 설정 파일 내용·체크아웃의 추적 파일이 바뀌었거나, 수정이 `.github/`·Argos 설정/보고서·테스트·migration/SQL을 건드리면 그 수정은 PR에서 빼고 이유를 보고서에 쓴다. publish도 같은 경로 규칙으로 패치를 다시 검사한다.
+- **재귀·중복 방지.** prepare는 `argos/` 브랜치(체크아웃 또는 `GITHUB_HEAD_REF`/`GITHUB_REF_NAME`)와 `Argos-Result:` 트레일러가 있는 HEAD에서 `skipped` artifact만 만들고 publish는 아무것도 하지 않는다. 브랜치 이름은 대상 브랜치별로 고정(`argos/report-<브랜치>`)이고, PR은 그 브랜치 + 본문의 숨은 마커(`<!-- argos-ci:v1 branch=… -->`, publish만 씀)로 찾아 **수정**한다. 브랜치 끝 커밋의 `Argos-Source:`가 이번 커밋이면 push도 PR 수정도 하지 않는다. 브랜치 끝에 Argos가 쓰지 않은 커밋(사람이 push)이 있으면 덮어쓰지 않고 경고한다.
+- **publish가 거부하는 artifact.** `pr.json` 스키마 위반(브랜치는 `argos/…`만), `argos.config.yaml`·`.argos/*.md|json` 밖으로 쓰는 파일, 심볼릭 링크·artifact 밖 경로, 패치가 `.github/`·테스트·Argos 설정·migration을 건드리거나 바이너리/심링크/서브모듈 변경, 제목·본문·파일·패치 어디든 JWT·전체 `ARGOS_…` 마커·GitHub 토큰·개인 키·AWS 키·긴 Bearer 값·Argos PR 마커가 있는 경우.
+- **워크플로.** `examples/github-workflow.yml`. prepare job은 `permissions: contents: read`, 체크아웃 `persist-credentials: false`, env에 토큰 없음(있어도 prepare가 지움; 앱 프로세스·컨테이너는 원래 호스트 env를 받지 않는다: `runner.buildEnv`, `container.ts`). publish job만 `contents: write`, `pull-requests: write`와 `GH_TOKEN`을 갖고, Argos 도구만 체크아웃하며 고객 저장소는 체크아웃·빌드하지 않는다. 포크 PR에서는 publish를 건너뛴다.
+- **한계(미구현).** 같은 커밋 재실행 시 prepare(스캔)는 다시 돈다(중복 검사는 publish에서만). 코드 수정과 설정·보고서가 한 PR에 함께 있다(위 "설정·보고서 PR"과 달리 분리하지 않음). 실제 GitHub에서의 권한·`gh` 동작은 아직 확인하지 않았다(로컬 bare 저장소와 가짜 `gh`로만 시험).
 
 ## 설정·보고서 PR
-검증된 코드 수정이 없어도 **설정(`init`/`--update`)과 보고서를 PR로 올리는 것**이 목표 흐름의 일부다(구현 예정). 설정 PR이 사람이 `ai-draft` 규칙을 확인하는 절차가 되고, 확인되지 않은 규칙은 보고서에 "미확인"으로 남는다. 코드 수정 PR과 설정 PR은 별개의 브랜치·PR로 분리한다.
+검증된 코드 수정이 없어도 설정과 보고서를 PR로 올린다(위 prepare/publish로 구현). 설정 PR이 사람이 `ai-draft` 규칙을 확인하는 절차가 되고, 확인되지 않은 규칙은 보고서에 "미확인"으로 남는다.
 
 ## CI에서 지켜야 할 것
 - **PR 쓰기 자격증명(`GITHUB_TOKEN`, `gh` 인증)은 고객 코드·빌드·LLM에 전달하지 않는다.** 앱 환경은 비워서 실행하고, PR 게시는 고객 코드 실행이 끝난 뒤 한다.
