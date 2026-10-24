@@ -128,6 +128,11 @@ export function proposeFixes(cfg: Config, findings: Finding[], srcDir: string): 
         return `Route ${res?.route ?? f.resourceId}: require authentication (reject anonymous requests with 401) before doing any work.`;
       case "sqli":
         return `Route ${res?.route ?? f.resourceId}: pass query parameter(s) ${(res?.params ?? []).join(", ")} as bound parameters (prepared statement), never by string concatenation.`;
+      case "secrets":
+        if (f.env) {
+          return `Route ${res?.route ?? f.resourceId} returns the process environment (${f.env} leaked): remove or disable this debug route in production; never serialize process.env into a response.`;
+        }
+        return `Resolve: ${f.detail}`;
       default:
         return `Resolve: ${f.detail}`;
     }

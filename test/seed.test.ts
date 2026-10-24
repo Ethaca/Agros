@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cpSync, mkdtempSync, existsSync } from "node:fs";
+import { cpSync, mkdtempSync, existsSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -104,4 +104,34 @@ test("sensitive column name matching is case-insensitive substring", () => {
   assert.ok(isSensitiveColumn("API_KEY", ["api_key"]));
   assert.ok(isSensitiveColumn("user_password_hash", ["password"]));
   assert.ok(!isSensitiveColumn("name", ["api_key", "token"]));
+});
+
+test("<x>_id columns point at the same org's row in table x", () => {
+  const wd = mkdtempSync(join(tmpdir(), "argos-seed-fk-"));
+  writeFileSync(join(wd, "schema.sql"), `
+    CREATE TABLE tasks (id INTEGER PRIMARY KEY, dataset_id INTEGER NOT NULL, vendor_id TEXT NOT NULL, title TEXT);
+    CREATE TABLE datasets (id INTEGER PRIMARY KEY, vendor_id TEXT NOT NULL, name TEXT);`);
+  const owner = { owner: "allow", other: "deny", anonymous: "deny" };
+  const c = cfg({
+    resources: [
+      { id: "task-read", route: "GET /t/:id", owner: { table: "tasks", column: "vendor_id" }, expect: owner },
+      { id: "dataset-read", route: "GET /d/:id", owner: { table: "datasets", column: "vendor_id" }, expect: owner },
+    ],
+  });
+  seedDatabase(c, { workdir: wd, seedKey: "k" });
+  const db = new DatabaseSync(join(wd, "data.db"));
+  const rows = db.prepare("SELECT t.vendor_id AS v, t.dataset_id AS did, d.vendor_id AS dv FROM tasks t JOIN datasets d ON d.id = t.dataset_id ORDER BY t.id").all() as any[];
+  assert.equal(rows.length, 2);
+  assert.ok(rows.every((r) => r.v === r.dv), "each task belongs to a dataset of the same org");
+  db.close();
+});
+
+test("orgMarkers collects every table's marker for an org; env canaries are in allMarkers/redact", async () => {
+  const { orgMarkers, makeEnvCanaries } = await import("../src/seed.js");
+  const m = seedDatabase(cfg(), { workdir: workdir(), seedKey: "k" });
+  assert.equal(orgMarkers(m, "v1").length, 2); // datasets + vendors markers
+  m.envCanaries = makeEnvCanaries(cfg(), "k");
+  assert.match(m.envCanaries[0]!.marker, /^ARGOS_ENV_JWT_SECRET_[0-9a-f]{6}$/);
+  assert.ok(allMarkers(m).includes(m.envCanaries[0]!.marker));
+  assert.ok(!redact(`x ${m.envCanaries[0]!.marker}`, m).includes(m.envCanaries[0]!.marker));
 });

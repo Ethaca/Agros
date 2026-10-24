@@ -87,3 +87,14 @@ test("stop() terminates the process", async () => {
   await t.stop();
   await assert.rejects(fetch(t.baseUrl + "/health", { signal: AbortSignal.timeout(1000) }));
 });
+
+test("extraEnv (env canaries) reaches the app and overrides nothing else", async () => {
+  const t = await startTarget(cfg({ CUSTOM: "yes" }), { quiet: true, extraEnv: { JWT_SECRET: "ARGOS_ENV_JWT_SECRET_abcdef" } });
+  try {
+    const env = (await (await fetch(t.baseUrl + "/env")).json()) as Record<string, string>;
+    assert.equal(env.JWT_SECRET, "ARGOS_ENV_JWT_SECRET_abcdef");
+    assert.equal(env.CUSTOM, "yes");
+  } finally {
+    await t.stop();
+  }
+});

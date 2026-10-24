@@ -132,3 +132,23 @@ test("sqli: only resources with params are tested", async () => {
   const f = await sqli(cfg(), "http://127.0.0.1:1", manifest);
   assert.deepEqual(f, []);
 });
+
+test("a proven leak is reported red even without a working control (no legit access exists)", () => {
+  const m: Matrix = {
+    personas: ["anonymous"], resources: ["debug-env"],
+    cells: [{ persona: "anonymous", resource: "debug-env", expected: "deny", observed: "allow", verdict: "VULNERABLE", evidence: { request: "GET /debug/env", status: 200 } }],
+  };
+  const c = { ...cfg(), resources: [{ id: "debug-env", route: "GET /debug/env", expect: { owner: "deny" as const, other: "deny" as const, anonymous: "deny" as const } }] };
+  assert.equal(unauth(c, m)[0]!.verdict, "VULNERABLE");
+});
+
+test("sqli reads the parameter from the route's query string", async () => {
+  const srv = await sqliApp("vuln");
+  try {
+    const c = { ...cfg(), resources: [{ id: "search", route: "GET /api/search?search=", expect: { owner: "allow" as const, other: "deny" as const, anonymous: "deny" as const } }] };
+    const f = await sqli(c, `http://127.0.0.1:${(srv.address() as AddressInfo).port}`, manifest);
+    assert.equal(f[0]!.verdict, "VULNERABLE");
+  } finally {
+    srv.close();
+  }
+});

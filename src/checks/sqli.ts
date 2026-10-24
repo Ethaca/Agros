@@ -22,8 +22,9 @@ export async function sqli(cfg: Config, baseUrl: string, manifest: SeedManifest,
   const anon = cfg.personas.find((p) => p.auth.type === "none");
 
   for (const r of cfg.resources) {
-    if (!r.params?.length) continue;
-    const { method, path } = parseRoute(r.route);
+    const { method, path, queryNames } = parseRoute(r.route);
+    const params = [...new Set([...(r.params ?? []), ...queryNames])];
+    if (!params.length) continue;
     const persona: Persona | undefined = r.public ? anon : authed;
     if (method !== "GET" || !persona) {
       out.push(skip(r.id, persona?.name ?? "-", r.route, method !== "GET" ? "sqli only tests GET routes" : "no persona available"));
@@ -32,7 +33,7 @@ export async function sqli(cfg: Config, baseUrl: string, manifest: SeedManifest,
     const rowId = (persona.org && manifest.ids[r.id]?.[persona.org]) || 1;
     const filled = fillPath(path, rowId);
 
-    for (const param of r.params) {
+    for (const param of params) {
       const send = (value: string) => sendAs(baseUrl, persona, method, filled, { query: { [param]: value }, timeoutMs: opts.timeoutMs });
       const control = await send("1");
       if (!is2xx(control)) {

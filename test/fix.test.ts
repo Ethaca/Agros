@@ -71,7 +71,9 @@ test("fix --apply writes the patch; a re-scan shows the secrets leak gone and no
   assert.match(readFileSync(join(dir, "app.mjs"), "utf8"), /SELECT id, name FROM vendors WHERE id = \?"\)/);
 
   const after = await runScan(opts(cfg));
-  assert.equal(after.findings.filter((f) => f.check === "secrets" && f.verdict !== "OK").length, 0);
+  assert.equal(after.findings.filter((f) => f.check === "secrets" && f.column && f.verdict !== "OK").length, 0);
+  // the env dump (flaw 5) is not mechanically fixable: still reported, with guidance
+  assert.ok(after.findings.some((f) => f.check === "secrets" && f.env && f.verdict === "VULNERABLE"));
   assert.ok(after.counts.VULNERABLE < before.counts.VULNERABLE);
   // same matrix: controls (owner reading own data) still work
   assert.ok(after.matrix.cells.filter((c) => c.persona === "vendor1" && c.target === "v1").every((c) => c.verdict === "OK"));
@@ -99,4 +101,13 @@ test("fix on the already-fixed app has nothing to do", async () => {
   const r = await runFix(opts(fixedCfg));
   assert.deepEqual(r.proposals, []);
   assert.equal(r.tried, false);
+});
+
+test("env exposure gets specific guidance, never an automatic edit", () => {
+  const { dir, cfg } = fixture();
+  const f: Finding = { check: "secrets", resourceId: "debug-env", persona: "vendor1", verdict: "VULNERABLE", proof: { request: "GET /debug/env" }, detail: "d", env: "JWT_SECRET" };
+  const p = proposeFixes(loadConfig(cfg), [f], dir)[0]!;
+  assert.deepEqual(p.edits, []);
+  assert.match(p.guidance, /process\.env|environment/);
+  assert.match(p.guidance, /debug-env|GET \/debug\/env/);
 });

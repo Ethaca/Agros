@@ -41,6 +41,7 @@ createServer((req, res) => {
     if (fixed && !org) return void res.writeHead(401).end(); // flaw 2 when !fixed
     return void res.end("{}");
   }
+  if (u.pathname === "/debug/env" && !fixed) return void res.end(JSON.stringify(process.env)); // flaw 5
   if (req.url === "/health") return void res.end("ok");
   res.writeHead(404).end();
 }).listen(Number(process.env.PORT), "127.0.0.1");

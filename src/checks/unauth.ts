@@ -18,7 +18,7 @@ export function unauth(cfg: Config, m: Matrix): Finding[] {
     const control = c.target
       ? ownCell(cfg, m, c.target, c.resource)?.verdict === "OK"
       : authedCells(cfg, m, c.resource).some((a) => a.verdict === "OK");
-    if (!control) {
+    if (!control && c.verdict !== "VULNERABLE") {
       out.push(finding("unauth", c, "SKIPPED", `no working authenticated control for ${c.resource}; cannot trust this result. ${describe(c)}`));
       continue;
     }

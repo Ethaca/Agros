@@ -52,7 +52,7 @@
 ```bash
 pnpm install                 # 최초 1회 (esbuild 빌드는 pnpm-workspace.yaml에서 허용됨)
 pnpm run typecheck           # 타입 검사
-pnpm test                    # 전체 단위 테스트 (현재 65개)
+pnpm test                    # 전체 단위 테스트 (현재 78개)
 
 # 파일 하나만
 node --import tsx --test test/config.test.ts
@@ -86,12 +86,14 @@ pnpm argos --help
 - **sqli:** `resources[].params`에 적은 쿼리 파라미터마다 `"1"`(대조) → `"'"` → `"''"` 3단계. 대조 2xx + `'` 5xx + `''` 2xx면 🔴, 대조 실패는 SKIPPED.
 - **secrets (a):** 매트릭스 요청의 원본 응답(본문·헤더)에서 비밀 마커 검색. 비소유자·익명 🔴, 소유자 재노출 🟡(`allowOwnerSecretRead`로 허용), 2xx 응답이 있는 리소스만 OK.
 - **fix:** `argos fix [--config] [--out] [--apply]`. 🔴/🟡 Finding마다 제안 생성. 기계적으로 고치는 건 `SELECT * FROM <table>` → 비민감 컬럼 목록뿐, 소유자 검사·인증·파라미터화는 수정 지침만 출력. 패치는 임시 복사본에 적용해 **같은 매트릭스를 다시 실행**하고, ① 대상 Finding 해결 ② 대조 칸 유지 ③ 새 🔴 없음 ④ 앱 기동일 때만 채택. 원본은 `--apply`일 때만 수정, 채택 실패 시 지침만. 결과는 `out/before/`, `out/after/`, `out/fix.json`.
+- **데모 앱 실측 (A의 `demo/`):** `vendor-platform` 🔴 25 / 🟡 3(소유자의 `api_key` 재노출) / ⚪ 0, 결함 1~5 모두 🔴. `clean` 🔴 0 / 🟡 0 / ⚪ 0. `manual-exploit.sh`와 일치(5/5, 0/5). `fix`는 `SELECT * FROM vendors` → `id, name, contact_email`(A의 clean 수정과 동일).
+- **데모에서 발견해 고친 것:** 라우트의 `?search=`에서 sqli 파라미터 읽기 / 목록 라우트가 호출자 범위로 응답하면 `deny`(오탐 🟡 제거) / 조직 마커는 어느 테이블 것이든 인정 / 시드가 `<x>_id`를 같은 조직의 행에 연결 / 증명된 유출(🔴)은 대조 없이도 보고 / secrets (b) 환경 카나리 구현.
 - **bola / unauth:** 매트릭스 칸에서 Finding 생성. 공격자·소유자 대조 요청이 성공하지 않으면 SKIPPED(죽은 앱·만료 토큰이 "안전"으로 보이지 않게).
 
 ## 알아둘 것
 
 - 계약 추가(A에게 알릴 것): `MatrixCell.target`, `SeedManifest.ids`, 리소스 설정 `params`(sqli 대상 쿼리 파라미터).
-- 자동 수정은 `SELECT *` 열 제한만 지원한다(그 외는 지침). secrets (b) 환경 카나리와 (c) 정적 스캔은 아직 없다(SHOULD).
+- 자동 수정은 `SELECT *` 열 제한만 지원한다(그 외는 지침).와 (c) 정적 스캔은 아직 없다(SHOULD).
 - 소유 행이 없는 리소스는 거부 기대 칸의 2xx를 🔴로 판정한다(오탐 여부는 데모 앱으로 재확인).
 
 - `seed.rows`는 아직 지원하지 않는다(지정하면 오류).
@@ -106,5 +108,5 @@ pnpm argos --help
 
 ## git
 
-- `feature/sun`, `main`: Step 5(scan)까지 push. Step 6~7은 미커밋.
+- `feature/sun`, `main`: Step 5(scan)까지 push. Step 6~7까지 push, 데모 앱 대응 수정은 미커밋.
 - `main`: `9590e30`(계약 단계).

@@ -33,6 +33,9 @@ resources:
     route: "POST /api/export"
     safe: true
     expect: { owner: allow, other: deny, anonymous: deny }
+  - id: debug-env
+    route: "GET /debug/env"
+    expect: { owner: deny, other: deny, anonymous: deny }
   - id: health
     route: "GET /health"
     public: true

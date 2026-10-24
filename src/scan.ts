@@ -4,7 +4,7 @@ import { CHECKS, runChecks } from "./checks/index.js";
 import { loadConfig, ConfigError } from "./config.js";
 import { renderMatrixMarkdown, runMatrixDetailed } from "./matrix.js";
 import { startTarget } from "./runner.js";
-import { hashConfigText, seedDatabase, type SeedManifest } from "./seed.js";
+import { hashConfigText, makeEnvCanaries, seedDatabase, type SeedManifest } from "./seed.js";
 import { CheckName, type Finding, type Matrix, type Verdict } from "./types.js";
 
 export class ScanError extends Error {}
@@ -48,7 +48,8 @@ export async function runScan(opts: ScanOptions): Promise<ScanResult> {
   if (needsRows && !cfg.seed) throw new ConfigError("seed: required when resources have an owner (rows are seeded from them)");
 
   const seedKey = hashConfigText(readFileSync(configPath, "utf8"));
-  let manifest: SeedManifest = { markers: {}, secrets: [], ids: {} };
+  const envCanaries = cfg.checks.includes("secrets") ? makeEnvCanaries(cfg, seedKey) : [];
+  let manifest: SeedManifest = { markers: {}, secrets: [], ids: {}, envCanaries };
 
   const timeoutMs = opts.timeoutMs ?? 300_000;
   let timer: NodeJS.Timeout | undefined;
@@ -63,9 +64,10 @@ export async function runScan(opts: ScanOptions): Promise<ScanResult> {
       target = await startTarget(cfg, {
         baseDir: dirname(configPath),
         quiet: opts.quiet,
+        extraEnv: Object.fromEntries(envCanaries.map((k) => [k.name, k.marker])),
         beforeStart: (workdir) => {
           opts.patch?.(workdir);
-          if (cfg.seed) manifest = seedDatabase(cfg, { workdir, seedKey });
+          if (cfg.seed) manifest = { ...seedDatabase(cfg, { workdir, seedKey }), envCanaries };
         },
       });
       // Timeout fired while the app was still booting: don't leave it running.

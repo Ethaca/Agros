@@ -55,8 +55,8 @@ test("sqli (flaw 3) and secrets (flaw 4) are red on the flawed app, with masked 
   assert.equal(sqli.resourceId, "dataset-search");
   assert.match(sqli.proof.note!, /control 200 \/ ' 500 \/ '' 200/);
 
-  const leaks = r.findings.filter((f) => f.check === "secrets" && f.verdict === "VULNERABLE");
-  assert.deepEqual(leaks.map((f) => f.persona).sort(), ["anonymous", "vendor1", "vendor2"]);
+  const leaks = r.findings.filter((f) => f.check === "secrets" && f.column && f.verdict === "VULNERABLE");
+  assert.deepEqual(leaks.map((f) => f.persona).sort(), ["anonymous", "vendor1", "vendor2"]); // (a) column leaks only
   assert.ok(leaks.every((f) => f.column === "vendors.api_key" && f.proof.marker === "ARGOS_"));
   // owner reading own key: reported as SUSPECTED, not red
   assert.ok(r.findings.some((f) => f.check === "secrets" && f.verdict === "SUSPECTED" && /owner re-exposed/.test(f.detail)));
@@ -93,4 +93,18 @@ test("CLI: exit codes 0 / 2 / 1 and output files", () => {
   const bad = cli(["--config", "nope.yaml"]);
   assert.equal(bad.status, 1);
   assert.match(bad.stderr, /^argos: .*nope\.yaml: cannot read file/);
+});
+
+test("env canary leak (flaw 5) is red on the flawed app and the fixed app is clean", async () => {
+  const bad = await run("argos.config.yaml");
+  const envLeaks = bad.findings.filter((f) => f.check === "secrets" && f.env && f.verdict === "VULNERABLE");
+  assert.ok(envLeaks.length >= 1);
+  assert.ok(envLeaks.every((f) => f.resourceId === "debug-env" && f.proof.marker === "ARGOS_"));
+  assert.ok(bad.findings.some((f) => f.check === "unauth" && f.resourceId === "debug-env" && f.verdict === "VULNERABLE"));
+  const dump = readFileSync(bad.files.findings, "utf8");
+  assert.ok(!/ARGOS_ENV_[A-Z_]+_[0-9a-f]{6}/.test(dump), "no full canary value in output");
+
+  const ok = await run("fixed.config.yaml");
+  assert.equal(ok.counts.VULNERABLE, 0);
+  assert.equal(ok.counts.SKIPPED, 0, JSON.stringify(ok.findings.filter((f) => f.verdict === "SKIPPED")));
 });

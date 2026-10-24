@@ -22,6 +22,8 @@ export interface RunnerOptions {
   quiet?: boolean;
   /** Runs on the temp copy after copying and before the app starts (e.g. seeding the DB). */
   beforeStart?: (workdir: string) => void | Promise<void>;
+  /** Extra environment variables for the app (e.g. env canaries). Applied after target.env. */
+  extraEnv?: Record<string, string>;
 }
 
 export interface RunningTarget {
@@ -51,12 +53,13 @@ function freePort(): Promise<number> {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Parent env is NOT forwarded: only PATH, HOME (temp), PORT and target.env. */
-export function buildEnv(cfg: Config, port: number, home: string): Record<string, string> {
+export function buildEnv(cfg: Config, port: number, home: string, extra: Record<string, string> = {}): Record<string, string> {
   return {
     PATH: process.env.PATH ?? "/usr/bin:/bin",
     HOME: home,
     PORT: String(port),
     ...cfg.target.env,
+    ...extra,
   };
 }
 
@@ -116,7 +119,7 @@ export async function startTarget(cfg: Config, opts: RunnerOptions = {}): Promis
   // detached: own process group, so stop() also reaches grandchildren of `sh -c`.
   const child: ChildProcess = spawn("sh", ["-c", cfg.target.start], {
     cwd: workdir,
-    env: buildEnv(cfg, port, home),
+    env: buildEnv(cfg, port, home, opts.extraEnv),
     detached: true,
     stdio: ["ignore", "pipe", "pipe"],
   });

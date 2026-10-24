@@ -9,7 +9,7 @@ import { Matrix } from "../src/types.js";
 import { app, cfg, manifest, M1 } from "./helpers/fake-app.js";
 
 test("observe: SPEC 6.4 rules", () => {
-  const base = { marker: M1, ownRequest: false };
+  const base = { markers: [M1], ownRequest: false };
   assert.equal(observe({ ...base, status: 200, body: `{"name":"${M1}"}` }), "allow");
   assert.equal(observe({ ...base, status: 200, body: "{}" }), "allow-empty");
   assert.equal(observe({ ...base, status: 201, body: M1 }), "allow");
@@ -21,6 +21,17 @@ test("observe: SPEC 6.4 rules", () => {
   assert.equal(observe({ ...base, status: 302, body: "" }), "error");
   assert.equal(observe({ ...base, status: null, body: "" }), "error");
   assert.equal(observe({ status: 200, body: "x", ownRequest: false }), "allow"); // no row/marker
+});
+
+test("observe: scoped list without the other org's marker is deny, not allow-empty", () => {
+  const o = { status: 200, body: "[]", markers: [M1], ownRequest: false };
+  assert.equal(observe({ ...o, scopedList: true }), "deny");
+  assert.equal(observe({ ...o, scopedList: false }), "allow-empty");
+  assert.equal(observe({ ...o, scopedList: true, body: `[{"n":"${M1}"}]` }), "allow"); // list leaked the other org's row
+});
+
+test("observe: any marker of the org counts (response may come from another table)", () => {
+  assert.equal(observe({ status: 200, body: "task ARGOS_task_v1_cccccc", markers: [M1, "ARGOS_task_v1_cccccc"], ownRequest: true }), "allow");
 });
 
 test("verdictFor: never reports OK for ambiguous results", () => {
@@ -35,7 +46,9 @@ test("verdictFor: never reports OK for ambiguous results", () => {
 });
 
 test("http helpers", () => {
-  assert.deepEqual(parseRoute("GET /api/datasets/:id"), { method: "GET", path: "/api/datasets/:id" });
+  assert.deepEqual(parseRoute("GET /api/datasets/:id"), { method: "GET", path: "/api/datasets/:id", queryNames: [] });
+  assert.deepEqual(parseRoute("GET /api/datasets?search="), { method: "GET", path: "/api/datasets", queryNames: ["search"] });
+  assert.deepEqual(parseRoute("GET /x?a=1&b="), { method: "GET", path: "/x", queryNames: ["a", "b"] });
   assert.equal(fillPath("/api/datasets/:id", 7), "/api/datasets/7");
   assert.equal(fillPath("/a/:x/b/:y", "q r"), "/a/q%20r/b/q%20r");
 });

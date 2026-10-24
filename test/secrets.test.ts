@@ -58,7 +58,14 @@ test("leak on an error response still counts", () => {
 test("OK only when the resource answered 2xx; otherwise SKIPPED", () => {
   const cfg = parseConfig(base);
   assert.equal(secrets(cfg, matrix("vendor1"), [res("{}")], manifest)[0]!.verdict, "OK");
-  assert.equal(secrets(cfg, matrix("vendor1"), [res("", {}, 403)], manifest)[0]!.verdict, "SKIPPED");
+  // owner got 403 where allow was expected -> not conclusive
+  const bad = matrix("vendor1");
+  Object.assign(bad.cells[0]!, { observed: "deny", verdict: "SUSPECTED" });
+  assert.equal(secrets(cfg, bad, [res("", {}, 403)], manifest)[0]!.verdict, "SKIPPED");
+  // everyone denied exactly as expected -> nothing to leak
+  const denied = matrix("vendor2");
+  Object.assign(denied.cells[0]!, { expected: "deny", observed: "deny", verdict: "OK" });
+  assert.equal(secrets(cfg, denied, [res("", {}, 403)], manifest)[0]!.verdict, "OK");
   assert.equal(secrets(cfg, matrix("vendor1"), [undefined], manifest)[0]!.verdict, "SKIPPED");
 });
 
@@ -67,4 +74,18 @@ test("no seeded secrets -> SKIPPED, never a silent pass", () => {
   const f = secrets(cfg, matrix("vendor1"), [res("{}")], { markers: {}, ids: {}, secrets: [] });
   assert.equal(f.length, 1);
   assert.equal(f[0]!.verdict, "SKIPPED");
+});
+
+test("env canaries: leaked value is red with env name, no leak is OK, nothing answered is SKIPPED", () => {
+  const cfg = parseConfig(base);
+  const withEnv: SeedManifest = { ...manifest, envCanaries: [{ name: "JWT_SECRET", marker: "ARGOS_ENV_JWT_SECRET_abcdef" }] };
+  const leak = secrets(cfg, matrix("vendor1"), [res(JSON.stringify({ JWT_SECRET: "ARGOS_ENV_JWT_SECRET_abcdef" }))], withEnv).filter((f) => f.env);
+  assert.equal(leak.length, 1);
+  assert.equal(leak[0]!.verdict, "VULNERABLE");
+  assert.equal(leak[0]!.env, "JWT_SECRET");
+  assert.equal(leak[0]!.proof.marker, "ARGOS_");
+  const clean = secrets(cfg, matrix("vendor1"), [res("{}")], withEnv).find((f) => f.resourceId === "(env)")!;
+  assert.equal(clean.verdict, "OK");
+  const dead = secrets(cfg, matrix("vendor1"), [undefined], withEnv).find((f) => f.resourceId === "(env)")!;
+  assert.equal(dead.verdict, "SKIPPED");
 });

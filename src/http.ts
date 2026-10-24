@@ -21,9 +21,12 @@ export interface RequestOptions {
 
 export const REQUEST_TIMEOUT_MS = 5_000;
 
-export function parseRoute(route: string): { method: string; path: string } {
-  const [method, path] = route.split(" ", 2);
-  return { method: method!, path: path! };
+/** `GET /api/datasets?search=` -> path "/api/datasets", query names ["search"]. */
+export function parseRoute(route: string): { method: string; path: string; queryNames: string[] } {
+  const [method, full] = route.split(" ", 2);
+  const [path, qs = ""] = full!.split("?", 2);
+  const queryNames = qs.split("&").map((kv) => kv.split("=")[0]!).filter(Boolean);
+  return { method: method!, path: path!, queryNames };
 }
 
 /** Fill `:name` params. All params get the same value (one id per request). */
