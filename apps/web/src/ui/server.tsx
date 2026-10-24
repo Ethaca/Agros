@@ -49,12 +49,19 @@ export function landingPage(): string {
 }
 
 export function dashboardPage(user: UserRow, ghRepos: GhRepo[], rows: RepoRow[], recent: ScanRow[], csrf: string, flash?: FlashMessage): string {
-  const enabled = new Set(rows.filter((r) => r.enabled).map((r) => r.full_name));
+  const byName = new Map(rows.filter((r) => r.enabled).map((r) => [r.full_name, r]));
   const repos = [...ghRepos]
-    .sort((a, b) => Number(enabled.has(b.full_name)) - Number(enabled.has(a.full_name)))
-    .map((r) => ({ fullName: r.full_name, private: r.private, htmlUrl: r.html_url, enabled: enabled.has(r.full_name) }));
-  const reportLang = isLang(user.report_lang) ? user.report_lang : config.lang;
-  return renderPage('dashboard', { ...base(user, csrf, flash), repos, recent: recent.map(scanSummary), reportLang, reportSimple: !!user.report_simple }, '대시보드');
+    .sort((a, b) => Number(byName.has(b.full_name)) - Number(byName.has(a.full_name)))
+    .map((r) => {
+      const row = byName.get(r.full_name);
+      return {
+        fullName: r.full_name, private: r.private, htmlUrl: r.html_url, enabled: !!row,
+        // 레포별 PR 리포트 설정. 없으면 서버 기본값을 보여 준다
+        reportLang: isLang(row?.report_lang) ? row.report_lang : config.lang,
+        reportSimple: !!row?.report_simple,
+      };
+    });
+  return renderPage('dashboard', { ...base(user, csrf, flash), repos, recent: recent.map(scanSummary) }, '대시보드');
 }
 
 export function scanPage(user: UserRow, scan: ScanRow, csrf = ''): string {

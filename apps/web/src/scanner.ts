@@ -2,7 +2,7 @@ import { analyze } from './analyzer.ts';
 import { config } from './config.ts';
 import { relatedPaths } from './context.ts';
 import { decrypt } from './crypto.ts';
-import { scans, users } from './db.ts';
+import { repos, scans, users } from './db.ts';
 import { isScannable, parsePatch, type ParsedPatch } from './diff.ts';
 import { GitHub } from './github.ts';
 import { buildReviewComments, renderSummaryMarkdown, REPORT_MARKER, reportText, shouldFail, statusDescription } from './reporter.ts';
@@ -18,7 +18,9 @@ export async function scanPullRequest({ userId, repo, number, force }: ScanJob):
   const user = await users.get(userId);
   if (!user) throw new Error(`user ${userId} 없음`);
   const gh = new GitHub(decrypt(user.token_enc));
-  const lang = isLang(user.report_lang) ? user.report_lang : config.lang;
+  // 리포트 설정은 레포 단위. 설정이 없으면 서버 기본값
+  const repoRow = await repos.byName(repo);
+  const lang = isLang(repoRow?.report_lang) ? repoRow.report_lang : config.lang;
   const text = reportText(lang);
 
   const pr = await gh.getPull(repo, number);
@@ -56,7 +58,7 @@ export async function scanPullRequest({ userId, repo, number, force }: ScanJob):
       }));
     }
 
-    const result = await analyze({ files, fileContents, relatedContents, pr: { repo, title: pr.title, body: pr.body }, lang, simple: !!user.report_simple });
+    const result = await analyze({ files, fileContents, relatedContents, pr: { repo, title: pr.title, body: pr.body }, lang, simple: !!repoRow?.report_simple });
     const summary = renderSummaryMarkdown(result, { detailUrl, sha });
 
     await gh.upsertIssueComment(repo, number, REPORT_MARKER, summary, user.login);

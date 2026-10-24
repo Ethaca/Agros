@@ -160,18 +160,6 @@ app.get('/', async (c) => {
   return c.html(dashboardPage(user, ghRepos, rows, recent, c.get('csrf'), FLASH[c.req.query('m') ?? '']));
 });
 
-// ---------- 설정 ----------
-app.post('/settings/report', requireUser, async (c) => {
-  const data = await form(c);
-  if (!data) return csrfFail(c);
-  if (!isLang(data.lang)) return c.redirect('/?m=notfound');
-  const { id } = c.get('user')!;
-  await users.setReportLang(id, data.lang);
-  // 체크하지 않은 체크박스는 form 에 실리지 않는다
-  await users.setReportSimple(id, !!data.simple);
-  return c.redirect('/?m=pref');
-});
-
 app.post('/repos/:owner/:name/enable', requireUser, async (c) => {
   if (!(await form(c))) return csrfFail(c);
   const { owner, name } = c.req.param();
@@ -196,6 +184,19 @@ app.post('/repos/:owner/:name/enable', requireUser, async (c) => {
     console.error('[enable]', err);
     return c.redirect('/?m=ghfail');
   }
+});
+
+// 레포별 PR 리포트 설정 (언어, 쉬운 설명). 보호 중인 내 레포에만
+app.post('/repos/:owner/:name/settings', requireUser, async (c) => {
+  const data = await form(c);
+  if (!data) return csrfFail(c);
+  const { owner, name } = c.req.param();
+  const row = await repos.byName(`${owner}/${name}`);
+  if (!row?.enabled || row.user_id !== c.get('user')!.id) return c.redirect('/?m=notfound');
+  if (!isLang(data.lang)) return c.redirect('/?m=notfound');
+  // 체크하지 않은 체크박스는 form 에 실리지 않는다
+  await repos.setReportSettings(row.id, { lang: data.lang, simple: !!data.simple });
+  return c.redirect('/?m=pref');
 });
 
 app.post('/repos/:owner/:name/disable', requireUser, async (c) => {

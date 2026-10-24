@@ -1,10 +1,11 @@
 import { AlertDialog } from '@base-ui/react/alert-dialog';
+import { Dialog } from '@base-ui/react/dialog';
 import { Checkbox } from '@base-ui/react/checkbox';
 import { Field } from '@base-ui/react/field';
 import { Select } from '@base-ui/react/select';
 import { Switch } from '@base-ui/react/switch';
 import {
-  AcademicCapIcon, ArrowPathIcon, ChatBubbleLeftRightIcon, CheckIcon, ChevronRightIcon, ChevronUpDownIcon,
+  AcademicCapIcon, ArrowPathIcon, ChatBubbleLeftRightIcon, CheckIcon, ChevronRightIcon, ChevronUpDownIcon, Cog6ToothIcon,
   ExclamationTriangleIcon, LockClosedIcon, MagnifyingGlassIcon, MapIcon, SignalIcon,
 } from '@heroicons/react/16/solid';
 import { useEffect, useMemo, useState } from 'react';
@@ -50,7 +51,7 @@ export function Landing(props: BaseProps) {
 
 // ---------- 대시보드 ----------
 
-export interface RepoItem { fullName: string; private: boolean; htmlUrl: string; enabled: boolean }
+export interface RepoItem { fullName: string; private: boolean; htmlUrl: string; enabled: boolean; reportLang: Lang; reportSimple: boolean }
 export interface ScanSummary { id: number; repo: string; prNumber: number; prTitle: string | null; headSha: string; status: 'running' | 'done' | 'error'; risk: string | null; createdAt: string }
 
 const TH = 'px-5 py-2.5 text-left text-xs font-medium text-gray-500';
@@ -107,13 +108,44 @@ function RepoRow({ repo, index, onAskDisable }: { repo: RepoItem; index: number;
         </div>
         <p className="mt-0.5 text-xs text-gray-500">{pending ? '바꾸는 중…' : repo.enabled ? '보호 중 · PR 검사와 Threat Radar 감시' : '꺼짐'}</p>
       </div>
-      <Switch.Root checked={repo.enabled} disabled={pending} aria-label={`${repo.fullName} 보호`} className={SWITCH}
-        onCheckedChange={(on) => { if (on) { setPending(true); submitForm(onId); } else onAskDisable(repo, offId); }}>
-        <Switch.Thumb className={THUMB} />
-      </Switch.Root>
+      <div className="flex flex-none items-center gap-2">
+        {repo.enabled && <RepoSettings repo={repo} />}
+        <Switch.Root checked={repo.enabled} disabled={pending} aria-label={`${repo.fullName} 보호`} className={SWITCH}
+          onCheckedChange={(on) => { if (on) { setPending(true); submitForm(onId); } else onAskDisable(repo, offId); }}>
+          <Switch.Thumb className={THUMB} />
+        </Switch.Root>
+      </div>
       <PostForm id={onId} action={`/repos/${repoPath(repo.fullName)}/enable`} className="hidden" />
       <PostForm id={offId} action={`/repos/${repoPath(repo.fullName)}/disable`} className="hidden" />
     </li>
+  );
+}
+
+/** 레포별 PR 리포트 설정: 톱니 버튼 → 대화상자 (언어, 쉬운 설명) */
+function RepoSettings({ repo }: { repo: RepoItem }) {
+  return (
+    <Dialog.Root>
+      <Dialog.Trigger aria-label={`${repo.fullName} 리포트 설정`} title="PR 리포트 설정"
+        className={cx('grid size-8 place-items-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900 data-popup-open:bg-gray-100', FOCUS)}>
+        <Cog6ToothIcon aria-hidden="true" className="size-4" />
+      </Dialog.Trigger>
+      <Dialog.Portal>
+        <Dialog.Backdrop className={BACKDROP} />
+        <Dialog.Popup className={DIALOG}>
+          <Dialog.Title className="text-base font-semibold">PR 리포트 설정</Dialog.Title>
+          <Dialog.Description className="mt-1 truncate text-sm text-gray-600">{repo.fullName}</Dialog.Description>
+          <PostForm action={`/repos/${repoPath(repo.fullName)}/settings`} className="mt-5 grid gap-4">
+            <LangSelect value={repo.reportLang} />
+            <SimpleCheckbox defaultChecked={repo.reportSimple} />
+            <p className="text-xs text-gray-500">PR 코멘트·인라인 리뷰·커밋 상태에 적용됩니다. 다음 검사부터 반영됩니다.</p>
+            <div className="mt-2 flex justify-end gap-2">
+              <Dialog.Close className={btnClass()}>취소</Dialog.Close>
+              <Btn type="submit" variant="primary">저장</Btn>
+            </div>
+          </PostForm>
+        </Dialog.Popup>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 
@@ -181,9 +213,9 @@ function RepoSelect({ names }: { names: string[] }) {
   );
 }
 
-export interface DashboardProps extends BaseProps { repos: RepoItem[]; recent: ScanSummary[]; reportLang: Lang; reportSimple: boolean }
+export interface DashboardProps extends BaseProps { repos: RepoItem[]; recent: ScanSummary[] }
 
-export function Dashboard({ repos, recent, reportLang, reportSimple, ...base }: DashboardProps) {
+export function Dashboard({ repos, recent, ...base }: DashboardProps) {
   const [filter, setFilter] = useState('');
   const [confirm, setConfirm] = useState<{ repo: RepoItem; formId: string } | null>(null);
   const shown = useMemo(() => repos.filter((r) => r.fullName.toLowerCase().includes(filter.trim().toLowerCase())), [repos, filter]);
@@ -221,15 +253,6 @@ export function Dashboard({ repos, recent, reportLang, reportSimple, ...base }: 
             </PostForm>
           </Card>
         )}
-
-        <Card>
-          <CardHeader title="PR 리포트 설정" description="PR 코멘트·인라인 리뷰·커밋 상태에 적용됩니다. 다음 검사부터 반영됩니다." />
-          <PostForm action="/settings/report" className="flex flex-wrap items-end gap-x-6 gap-y-4 px-5 py-4">
-            <div className="grid gap-1.5"><LangSelect value={reportLang} /></div>
-            <SimpleCheckbox defaultChecked={reportSimple} />
-            <Btn type="submit">저장</Btn>
-          </PostForm>
-        </Card>
       </div>
 
       <AlertDialog.Root open={!!confirm} onOpenChange={(o) => { if (!o) setConfirm(null); }}>

@@ -23,7 +23,7 @@ cloudflared tunnel --url http://127.0.0.1:8787 --no-autoupdate
 node apps/web/scripts/setup-demo.mjs --url https://YOUR-TUNNEL.trycloudflare.com
 ```
 
-설정 스크립트는 `.dev.vars`를 만들고 비어 있는 세션·암호화 키를 생성한다. 기존 키와 자격증명은 유지한다. PR 리포트 언어는 대시보드의 **PR 리포트 설정**에서 사용자별로 고른다(English / 한국어). 고르지 않은 사용자는 서버 기본값 `REPORT_LANG`을 따른다(`wrangler.jsonc`의 값, 비어 있으면 `en`).
+설정 스크립트는 `.dev.vars`를 만들고 비어 있는 세션·암호화 키를 생성한다. 기존 키와 자격증명은 유지한다. PR 리포트 언어와 쉬운 설명 옵션은 **레포별**로 정한다: 대시보드의 보호 중인 레포 줄에 있는 톱니(⚙) 버튼 → PR 리포트 설정(English / 한국어, 초등학교 5학년 수준으로 설명하기). 설정하지 않은 레포는 서버 기본값 `REPORT_LANG`을 따른다(`wrangler.jsonc`의 값, 비어 있으면 `en`).
 
 데모 실행 스크립트는 Wrangler의 로컬 DB 탐색·관측 API를 비활성화해 공개 터널로 노출되지 않도록 한다.
 

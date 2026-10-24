@@ -149,10 +149,10 @@ export async function initDb(database: D1Database) {
 
 /** 기존 테이블에 나중에 추가한 컬럼. 이미 있으면 D1 이 duplicate column 오류를 내므로 무시한다 */
 const ADDED_COLUMNS = [
-  // PR 리포트 언어 (en | ko). NULL 이면 REPORT_LANG
-  'ALTER TABLE users ADD COLUMN report_lang TEXT',
-  // 1 이면 AI 설명을 초등학교 5학년 수준으로 쉽게 쓴다
-  'ALTER TABLE users ADD COLUMN report_simple INTEGER NOT NULL DEFAULT 0',
+  // 레포별 PR 리포트 언어 (en | ko). NULL 이면 REPORT_LANG
+  'ALTER TABLE repos ADD COLUMN report_lang TEXT',
+  // 1 이면 그 레포의 AI 설명을 초등학교 5학년 수준으로 쉽게 쓴다
+  'ALTER TABLE repos ADD COLUMN report_simple INTEGER NOT NULL DEFAULT 0',
 ];
 
 export async function addColumns(database: D1Database) {
@@ -168,8 +168,11 @@ const q = (sql: string, ...values: unknown[]) => {
   return d1.prepare(sql).bind(...values);
 };
 
-export interface UserRow { id: number; github_id: number; login: string; avatar_url: string | null; token_enc: string; report_lang?: string | null; report_simple?: number }
-export interface RepoRow { id: number; user_id: number; full_name: string; hook_id: number | null; hook_secret_enc: string | null; enabled: number }
+export interface UserRow { id: number; github_id: number; login: string; avatar_url: string | null; token_enc: string }
+export interface RepoRow {
+  id: number; user_id: number; full_name: string; hook_id: number | null; hook_secret_enc: string | null; enabled: number;
+  report_lang?: string | null; report_simple?: number;
+}
 export interface ScanRow {
   id: number; user_id: number; repo_full_name: string; pr_number: number; pr_title: string | null; head_sha: string;
   status: 'running' | 'done' | 'error'; risk: string | null; result_json: string | null; error: string | null;
@@ -177,12 +180,6 @@ export interface ScanRow {
 }
 
 export const users = {
-  async setReportLang(id: number, lang: Lang) {
-    await q('UPDATE users SET report_lang = ? WHERE id = ?', lang, id).run();
-  },
-  async setReportSimple(id: number, simple: boolean) {
-    await q('UPDATE users SET report_simple = ? WHERE id = ?', simple ? 1 : 0, id).run();
-  },
   async upsert(u: { github_id: number; login: string; avatar_url: string; token_enc: string }): Promise<UserRow> {
     await q(`INSERT INTO users (github_id, login, avatar_url, token_enc) VALUES (?, ?, ?, ?)
       ON CONFLICT(github_id) DO UPDATE SET login = excluded.login, avatar_url = excluded.avatar_url, token_enc = excluded.token_enc`,
@@ -204,6 +201,10 @@ export const repos = {
   },
   async disable(id: number) {
     await q('UPDATE repos SET enabled = 0, hook_id = NULL, hook_secret_enc = NULL WHERE id = ?', id).run();
+  },
+  /** PR 리포트 설정. 보호를 껐다 켜도 유지된다 */
+  async setReportSettings(id: number, s: { lang: Lang; simple: boolean }) {
+    await q('UPDATE repos SET report_lang = ?, report_simple = ? WHERE id = ?', s.lang, s.simple ? 1 : 0, id).run();
   },
 };
 
