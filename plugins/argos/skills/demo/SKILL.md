@@ -1,9 +1,9 @@
 ---
 name: demo
-description: Hands-on Argos tutorial on the user's own GitHub account — six short steps (login, demo repo, vulnerable PR, Argos in Actions, report, cleanup), one confirmed step at a time. Use when the user asks to try, demo, learn, or experience Argos ("데모", "체험", "튜토리얼", "argos 데모 해줘", "try argos", "demo", "tutorial").
+description: Hands-on Argos tutorial on the user's own GitHub account — six short steps (login, demo repo, vulnerable PR, Argos in Actions, report, cleanup), one confirmed step at a time. Use when the user asks to try, demo, learn, or experience Argos ("데모", "체험", "튜토리얼", "argos 데모 해줘", "try argos", "demo", "tutorial"). English or Korean, chosen at the start.
 ---
 
-# Argos 튜토리얼
+# Argos tutorial / Argos 튜토리얼
 
 The user learns Argos by doing: a harmless-looking PR breaks access control, Argos catches it in GitHub Actions and opens a PR with a verified fix. You run every command; the user only confirms.
 
@@ -11,28 +11,52 @@ Script: `bash "${CLAUDE_PLUGIN_ROOT}/demo.sh" <command>` (below: `demo.sh`). Wor
 
 ## How to talk
 
-Every step uses **exactly this card** (🎯 says why the step exists), nothing more (speak the user's language; default Korean):
+Everything you say is in the **tutorial language** the user picked at the start (English or 한국어). The Korean lines below are the source text: in English, translate them faithfully and just as briefly. Command output stays as printed.
+
+Every step uses **exactly this card** (🎯 says why the step exists), nothing more:
 
 ```
-**[n/6] 단계 이름**
+**[n/6] <step name>**
 🎯 <what this step is for, one line>
 ▶ <what you ran / what happened, one or two lines>
 🔗 <link> — <what to look at there, a few words>   (steps 2–5; build links from the command output)
 💡 <the one idea to take away, one line>
 ```
 
-The 🔗 line invites the user to open the link and see it for themselves before moving on ("직접 확인해 보세요").
+The 🔗 line invites the user to open the link and see it for themselves before moving on ("직접 확인해 보세요" / "Take a look").
 
-Then move on with `AskUserQuestion`: one question, options `다음 단계` / `그만하기` (plus step-specific options below). No other prose, no tables, no recap of earlier steps.
+Then move on with `AskUserQuestion`: one question, options `다음 단계` / `그만하기` (English: `Next step` / `Stop`) plus step-specific options below, labelled in the tutorial language. No other prose, no tables, no recap of earlier steps.
 
 - Steps that change GitHub (2, 3, 6) run only after the user picks `다음 단계` on the previous card.
 - On failure: one line of cause + the fix command. Login commands are interactive: ask the user to type `! <command>`, never run them yourself.
 - Never invent numbers; take them from command output. Never print tokens.
-- Reuse the same `--repo <owner/name>` and `--lang` for every command.
+- Reuse the same `--repo <owner/name>` and `--lang` for every command. `--lang` is the tutorial language (`en` / `ko`): the report and the demo PR are written in it.
 
 ## Start
 
-Show this intro verbatim (translate if the user is not Korean), then ask `시작` / `그만하기`:
+First, one `AskUserQuestion` before anything else — question "Tutorial language / 튜토리얼 언어", options `English` / `한국어`. If the user already wrote in one language, put that one first and mark it (Recommended).
+
+Then show the intro for that language verbatim, and ask `Start` / `Stop` (`시작` / `그만하기`).
+
+English:
+
+```
+**What is Argos?**
+A security checker that starts your app and actually attacks it, instead of guessing from the code.
+On every PR it checks things like "can vendor A see vendor B's data?", and when it can fix a hole it re-runs the same attack and sends you the proven fix as a PR.
+
+**Six steps (about 5 minutes)**
+1. GitHub login — Argos runs in GitHub Actions. You only need gh, nothing to install.
+2. Get the demo app — a multi-tenant app built to look like real startup SaaS code. Pick Node.js (Express) or Spring Boot; Argos supports both.
+3. Open a vulnerable PR — a common access-control mistake (a missing lookup condition, …) hidden in an ordinary cleanup PR.
+4. Argos runs — it starts the app in isolated Docker and attacks every API as another company, another user and an anonymous user.
+5. Get the report — what got through and the evidence, as a PR. For Node it also contains a fix proven by the same attacks.
+6. Clean up — delete the practice repo. Your own project needs just one workflow file.
+
+This creates one private repository on your GitHub account; you can delete it at the end.
+```
+
+한국어:
 
 ```
 **Argos란?**
@@ -57,13 +81,12 @@ Show this intro verbatim (translate if the user is not Korean), then ask `시작
 - 💡 필요한 건 `git`과 `gh`뿐. 로컬에 Node·Docker는 필요 없다.
 - Fixes: no gh → `brew install gh`; not logged in → `! gh auth login -h github.com -s workflow`; missing scope → `! gh auth refresh -h github.com -s workflow`. Re-run check after.
 
-**[2/6] 데모 앱 받기** — first one `AskUserQuestion` with four questions:
+**[2/6] 데모 앱 받기** — first one `AskUserQuestion` with three questions (labels in the tutorial language):
 - 스택: `Node.js` (Recommended, 1~3분) — Express 스타일 API, 사람이 확인한 규칙 파일 포함 / `Spring Boot` (약 4분) — Spring Security(JWT) + JPA + PostgreSQL, 설정 파일 없이 Argos가 코드에서 규칙을 만든다
 - 레포 이름: `argos-demo` (Recommended); if check said it exists, recommend `argos-demo-<MMDD>`
 - 공개 범위: 비공개 (Recommended) / 공개
-- 리포트 언어: 한국어 (Recommended) / English
 
-Then `demo.sh create --stack <node|spring> --repo <owner/name> --lang <ko|en> [--public]`.
+Then `demo.sh create --stack <node|spring> --repo <owner/name> --lang <tutorial language: en|ko> [--public]`.
 - 🎯 Node: 벤더마다 자기 데이터만 보는 데이터 라벨링 API. Spring: 조직·역할이 있는 협업 문서 서비스. 둘 다 실제 SaaS 구조를 본떴다.
 - 🔗 `https://github.com/<repo>` — 앱 코드와 `.github/workflows/argos.yml`. Node는 `argos.config.yaml`(규칙), Spring은 `src/main/java/com/acme/workspace/service/ProjectService.java`(조직 조건)를 열어 보게 한다.
 - 💡 Node: `argos.config.yaml` = "누가 무엇을 볼 수 있나" 규칙. Spring: 설정 0줄, Argos가 코드·DB 스키마에서 규칙 초안을 만든다.
@@ -91,6 +114,6 @@ Then `demo.sh create --stack <node|spring> --repo <owner/name> --lang <ko|en> [-
 
 ## End
 
-One line, plus the saved report path. Nothing else.
-- Node: "완료: PR 하나로 Argos가 취약점을 찾고, 검증된 수정을 PR로 받았어요."
-- Spring: "완료: 설정 없이 PR 하나로 Argos가 권한 결함을 찾고, 리포트를 PR로 받았어요."
+One line in the tutorial language, plus the saved report path. Nothing else.
+- Node: "완료: PR 하나로 Argos가 취약점을 찾고, 검증된 수정을 PR로 받았어요." / "Done: with one PR, Argos found the holes and sent you a proven fix as a PR."
+- Spring: "완료: 설정 없이 PR 하나로 Argos가 권한 결함을 찾고, 리포트를 PR로 받았어요." / "Done: with zero config and one PR, Argos found the access-control flaws and sent you the report as a PR."

@@ -1,3 +1,20 @@
+# Argos demo plugin
+
+**English** · [한국어](#argos-데모-플러그인--pr-하나로-argos-체험)
+
+Try Argos on your own GitHub account in about 5 minutes. You open a harmless-looking PR; Argos in GitHub Actions starts the app in Docker, actually attacks it, and opens a PR with the report (and, for Node, a fix proven by the same attacks).
+
+```
+/plugin install argos --marketplace Ethaca/Agros     # older Claude Code: /plugin marketplace add Ethaca/Agros, then /plugin install argos@argos
+/argos:demo
+```
+
+You need Claude Code, `git` and the [GitHub CLI](https://cli.github.com) (`gh`). No Node or Docker locally. The tutorial asks for **English or 한국어** first; the report and the demo PR use the same language. Then pick a demo app: **Node.js** (about 1 minute, verified fix) or **Spring Boot** (about 4 minutes, zero config).
+
+Without Claude: `bash demo.sh check | create --stack node|spring --lang en | pr | watch | report | cleanup` from the plugin folder.
+
+---
+
 # Argos 데모 플러그인 — PR 하나로 Argos 체험
 
 내 GitHub 계정에 데모 레포를 만들고, 겉보기엔 무해한 PR을 올리면 GitHub Actions의 Argos가 앱을 Docker에서 실제로 공격해 보고 **리포트와 재검증된 수정이 담긴 PR**을 열어 준다. 5분 정도 걸린다.
@@ -29,7 +46,7 @@ Claude Code에서:
 /argos:demo
 ```
 
-또는 "Argos 데모 해줘"라고 말한다. 6단계 튜토리얼로, 단계마다 목표·결과·핵심 한 줄만 보여 주고 확인을 받은 뒤 명령을 대신 실행한다. GitHub 로그인이 필요하면 `! gh auth login -h github.com -s workflow`를 입력하라고 안내한다.
+또는 "Argos 데모 해줘"라고 말한다. 6단계 튜토리얼로(처음에 English / 한국어 선택), 단계마다 목표·결과·핵심 한 줄만 보여 주고 확인을 받은 뒤 명령을 대신 실행한다. GitHub 로그인이 필요하면 `! gh auth login -h github.com -s workflow`를 입력하라고 안내한다.
 
 | 단계 | 하는 일 |
 |---|---|
