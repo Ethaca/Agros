@@ -1,0 +1,14 @@
+{
+  "name": "demo-clean",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Argos demo target with the same routes and the flaws fixed (false-positive baseline).",
+  "scripts": {
+    "start": "node --no-warnings app.mjs",
+    "seed": "node --no-warnings seed.mjs"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
