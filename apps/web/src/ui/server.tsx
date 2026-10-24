@@ -1,8 +1,8 @@
 import { renderToString } from 'react-dom/server';
-import type { ExposureRow, InventoryRow, RepoRow, ScanRow, SignalRow, ThreatListRow, ThreatRow, UserRow } from '../db.ts';
+import type { ExposureRow, InventoryRow, RepoRow, SandboxJobRow, ScanRow, SignalRow, ThreatListRow, ThreatRow, UserRow } from '../db.ts';
 import type { GhRepo } from '../github.ts';
 import type { Level } from '../levels.ts';
-import type { AnalysisResult } from '../types.ts';
+import type { AnalysisResult, SandboxView } from '../types.ts';
 import { App, type PageName, type PageProps } from './app.tsx';
 import { Findings } from './findings.tsx';
 import type { BaseProps, FlashMessage, Viewer } from './kit.tsx';
@@ -54,9 +54,10 @@ export function dashboardPage(user: UserRow, ghRepos: GhRepo[], rows: RepoRow[],
   return renderPage('dashboard', { ...base(user, csrf, flash), repos, recent: recent.map(scanSummary) }, '대시보드');
 }
 
-export function scanPage(user: UserRow, scan: ScanRow, csrf = ''): string {
+export function scanPage(user: UserRow, scan: ScanRow, csrf = '', sandbox?: SandboxJobRow | null): string {
   return renderPage('scan', {
     ...base(user, csrf), scan: { ...scanSummary(scan), error: scan.error }, result: json<AnalysisResult | null>(scan.result_json, null),
+    sandbox: sandbox ? { status: sandbox.status, result: json<SandboxView['result']>(sandbox.result_json, null) } : null,
   }, `검사 #${scan.id}`);
 }
 

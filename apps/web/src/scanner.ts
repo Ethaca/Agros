@@ -6,6 +6,7 @@ import { scans, users } from './db.ts';
 import { isScannable, parsePatch, type ParsedPatch } from './diff.ts';
 import { GitHub } from './github.ts';
 import { buildReviewComments, renderSummaryMarkdown, REPORT_MARKER, shouldFail, statusDescription } from './reporter.ts';
+import { enqueueSandbox } from './sandbox.ts';
 
 // Workers 무료 플랜의 서브리퀘스트 한도(50)를 넘지 않도록 전체 파일 컨텍스트는 일부만 가져온다
 const MAX_CHANGED_CONTEXT = 10;
@@ -67,6 +68,7 @@ export async function scanPullRequest({ userId, repo, number, force }: ScanJob):
 
     await gh.createStatus(repo, sha, shouldFail(result) ? 'failure' : 'success', statusDescription(result), detailUrl);
     await scans.finish(scanId, result.risk, JSON.stringify(result));
+    await enqueueSandbox(scanId, userId, repo, number, sha);
     console.log(`[scan] #${scanId} 완료: risk=${result.risk}, findings=${result.findings.length}`);
     return scanId;
   } catch (err) {

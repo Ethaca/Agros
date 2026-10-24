@@ -1,4 +1,7 @@
 import type { Severity } from './config.ts';
+import type { SandboxResult } from '../../../src/sandbox/protocol.js';
+
+export interface SandboxView { status: string; result: SandboxResult | null }
 
 export type { Severity };
 

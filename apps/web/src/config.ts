@@ -36,4 +36,7 @@ export const config = {
   get githubClientSecret() { return required('GITHUB_CLIENT_SECRET'); },
   get sessionSecret() { return required('SESSION_SECRET'); },
   get encryptionKey() { return required('ENCRYPTION_KEY'); },
+  get sandboxEnabled() { return env('SANDBOX_ENABLED') === 'true'; },
+  get sandboxWorkerToken() { return env('SANDBOX_WORKER_TOKEN'); },
+  get sandboxRepos() { return env('SANDBOX_REPOS').split(',').map((r) => r.trim()).filter((r) => /^[\w.-]+\/[\w.-]+$/.test(r)); },
 };

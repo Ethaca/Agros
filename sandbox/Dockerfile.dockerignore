@@ -1,0 +1,7 @@
+*
+!sandbox/
+!sandbox/package.json
+!sandbox/package-lock.json
+!sandbox/start-app.mjs
+!src/
+!src/**

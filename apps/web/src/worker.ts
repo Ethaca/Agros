@@ -3,11 +3,12 @@ import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { bindEnv, config } from './config.ts';
 import { decrypt, encrypt, randomToken, signPayload, verifyPayload, verifyWebhookSignature } from './crypto.ts';
-import { exposures, ignored, initDb, inventories, radarState, repos, scans, signals, threatPrefs, threats, users, type D1Database, type UserRow } from './db.ts';
+import { exposures, ignored, initDb, inventories, radarState, repos, sandboxJobs, scans, signals, threatPrefs, threats, users, type D1Database, type UserRow } from './db.ts';
 import { exchangeOAuthCode, GitHub, GitHubError, type GhRepo } from './github.ts';
 import { collect, createIssueFor, createPrFor, RadarActionError, refreshInventory } from './radar.ts';
 import { scanPullRequest, type ScanJob } from './scanner.ts';
 import { dashboardPage, landingPage, messagePage, radarPage, scanPage } from './ui/server.tsx';
+import { sandboxRouter } from './sandbox.ts';
 
 /** 큐 하나로 PR 스캔과 Threat Radar 작업을 함께 처리한다 */
 type QueueJob = ({ kind?: undefined } & ScanJob) | { kind: 'inventory'; repo: string } | { kind: 'collect' };
@@ -53,6 +54,9 @@ app.use('*', async (c, next) => {
   bindEnv({ PUBLIC_URL: new URL(c.req.url).origin, ...c.env });
   await initDb(c.env.DB);
 
+  // Worker endpoints use a separate bearer credential, never browser cookies.
+  if (c.req.path.startsWith('/internal/sandbox/')) return next();
+
   const session = verifyPayload<{ uid: number; exp: number }>(getCookie(c, 'sid'));
   if (session) c.set('user', (await users.get(session.uid)) ?? undefined);
   let csrf = getCookie(c, 'csrf');
@@ -76,6 +80,8 @@ const csrfFail = (c: Ctx) => c.text('CSRF 토큰이 유효하지 않습니다', 
 
 const ghFor = (user: UserRow) => new GitHub(decrypt(user.token_enc));
 const enqueue = (c: Ctx, job: QueueJob) => c.env.SCAN_QUEUE.send({ ...job, publicUrl: config.publicUrl });
+
+app.route('/internal/sandbox', sandboxRouter);
 
 // ---------- webhook ----------
 app.post('/webhooks/github', async (c) => {
@@ -217,7 +223,8 @@ app.get('/scans/:id', requireUser, async (c) => {
   const user = c.get('user')!;
   const scan = await scans.getForUser(Number(c.req.param('id')), user.id);
   if (!scan) return c.html(messagePage('없음', '검사 결과를 찾을 수 없습니다.', { user, link: { href: '/', label: '대시보드로' } }), 404);
-  return c.html(scanPage(user, scan, c.get('csrf')));
+  const sandbox = await sandboxJobs.forScan(scan.id, user.id);
+  return c.html(scanPage(user, scan, c.get('csrf'), sandbox));
 });
 
 
