@@ -3,15 +3,16 @@ import { cpSync, mkdtempSync, rmSync, mkdirSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
+import { realpathSync } from "node:fs";
 import type { Config } from "./config.js";
+import { containerSpec, startContainer } from "./container.js";
+import { RunnerError } from "./errors.js";
+
+export { RunnerError };
 
 export const ISOLATION_WARNING = "격리 없음: 신뢰하는 코드에만 실행하세요 (no sandbox: run trusted code only)";
 
-export class RunnerError extends Error {
-  constructor(message: string, readonly logTail: string[] = []) {
-    super(logTail.length ? `${message}\n--- last ${logTail.length} log lines ---\n${logTail.join("\n")}` : message);
-  }
-}
+export type Isolation = "process" | "container";
 
 export interface RunnerOptions {
   /** Directory the config lives in; target.cwd resolves against it. Default: process.cwd(). */
@@ -24,9 +25,14 @@ export interface RunnerOptions {
   beforeStart?: (workdir: string) => void | Promise<void>;
   /** Extra environment variables for the app (e.g. env canaries). Applied after target.env. */
   extraEnv?: Record<string, string>;
+  /** Overrides cfg.target.isolation. */
+  isolation?: Isolation;
 }
 
 export interface RunningTarget {
+  isolation: Isolation;
+  /** Container image when isolation is "container". */
+  image: string | null;
   baseUrl: string;
   port: number;
   /** Temp copy the app runs in. The original directory is never touched. */
@@ -77,39 +83,17 @@ async function waitReady(url: string, deadline: number, exited: () => boolean): 
   return false;
 }
 
-export async function startTarget(cfg: Config, opts: RunnerOptions = {}): Promise<RunningTarget> {
-  const { readyTimeoutMs = 30_000, killGraceMs = 5_000 } = opts;
-  if (!opts.quiet) console.error(`⚠️  ${ISOLATION_WARNING}`);
+/** What the two launch modes have in common once the app is started. */
+interface Launched {
+  baseUrl: string;
+  exited(): boolean;
+  exitCode(): number | null | undefined;
+  logs(n?: number): string[];
+  /** Stops the app. The temp copy is removed by the caller. */
+  stop(): Promise<void>;
+}
 
-  const srcDir = resolve(opts.baseDir ?? process.cwd(), cfg.target.cwd);
-  const root = mkdtempSync(join(tmpdir(), "argos-run-"));
-  const workdir = join(root, "app");
-  const home = join(root, "home");
-  mkdirSync(home);
-  const cleanup = () => rmSync(root, { recursive: true, force: true });
-
-  try {
-    cpSync(srcDir, workdir, {
-      recursive: true,
-      filter: (p) => {
-        const rel = p === srcDir ? "" : p.slice(srcDir.length + 1);
-        return !COPY_EXCLUDES.has(rel.split(sep)[0] ?? "");
-      },
-    });
-  } catch (e) {
-    cleanup();
-    throw new RunnerError(`cannot copy target dir ${srcDir}: ${(e as Error).message}`);
-  }
-
-  try {
-    await opts.beforeStart?.(workdir);
-  } catch (e) {
-    cleanup();
-    throw e;
-  }
-
-  const port = await freePort();
-  const baseUrl = cfg.target.baseUrl.replace(/:0(?=\/|$)/, `:${port}`);
+function launchProcess(cfg: Config, opts: RunnerOptions, workdir: string, home: string, port: number, killGraceMs: number): Launched {
   const lines: string[] = [];
   const push = (chunk: Buffer) => {
     for (const l of chunk.toString().split("\n")) if (l) lines.push(l);
@@ -139,10 +123,12 @@ export async function startTarget(cfg: Config, opts: RunnerOptions = {}): Promis
       /* already gone */
     }
   };
-
-  let stopped: Promise<void> | undefined;
-  const stop = () =>
-    (stopped ??= (async () => {
+  return {
+    baseUrl: cfg.target.baseUrl.replace(/:0(?=\/|$)/, `:${port}`),
+    exited: () => exitCode !== undefined,
+    exitCode: () => exitCode,
+    logs: (n = 50) => lines.slice(-n),
+    stop: async () => {
       if (exitCode === undefined) {
         signalGroup("SIGTERM");
         const until = Date.now() + killGraceMs;
@@ -150,19 +136,103 @@ export async function startTarget(cfg: Config, opts: RunnerOptions = {}): Promis
         if (exitCode === undefined) signalGroup("SIGKILL");
       }
       signalGroup("SIGKILL"); // sweep stragglers in the group
+    },
+  };
+}
+
+async function launchContainer(cfg: Config, opts: RunnerOptions, workdir: string, port: number): Promise<Launched & { image: string }> {
+  const spec = containerSpec(cfg);
+  const c = await startContainer({
+    // realpath: on macOS the temp dir is a symlink (/var -> /private/var) that Docker's file sharing does not follow
+    workdir: realpathSync(workdir),
+    appPort: port,
+    env: { PORT: String(port), ...cfg.target.env, ...opts.extraEnv },
+    start: cfg.target.start,
+    spec,
+  });
+  return {
+    image: spec.image,
+    baseUrl: cfg.target.baseUrl.replace(/:0(?=\/|$)/, `:${c.hostPort}`),
+    exited: () => c.exitCode() !== undefined,
+    exitCode: () => c.exitCode(),
+    logs: (n = 50) => c.logs(n),
+    stop: () => c.stop(),
+  };
+}
+
+export async function startTarget(cfg: Config, opts: RunnerOptions = {}): Promise<RunningTarget> {
+  const { readyTimeoutMs = 30_000, killGraceMs = 5_000 } = opts;
+  const isolation: Isolation = opts.isolation ?? cfg.target.isolation;
+  if (!opts.quiet) {
+    console.error(
+      isolation === "container"
+        ? `🔒 container isolation: ${containerSpec(cfg).image}, no network, read-only root filesystem, non-root, resource limits`
+        : `⚠️  ${ISOLATION_WARNING}`,
+    );
+  }
+
+  const srcDir = resolve(opts.baseDir ?? process.cwd(), cfg.target.cwd);
+  const root = mkdtempSync(join(tmpdir(), "argos-run-"));
+  const workdir = join(root, "app");
+  const home = join(root, "home");
+  mkdirSync(home);
+  const cleanup = () => rmSync(root, { recursive: true, force: true });
+
+  try {
+    cpSync(srcDir, workdir, {
+      recursive: true,
+      filter: (p) => {
+        const rel = p === srcDir ? "" : p.slice(srcDir.length + 1);
+        return !COPY_EXCLUDES.has(rel.split(sep)[0] ?? "");
+      },
+    });
+  } catch (e) {
+    cleanup();
+    throw new RunnerError(`cannot copy target dir ${srcDir}: ${(e as Error).message}`);
+  }
+
+  try {
+    await opts.beforeStart?.(workdir);
+  } catch (e) {
+    cleanup();
+    throw e;
+  }
+
+  const port = await freePort();
+  let launched: Launched & { image?: string };
+  try {
+    launched = isolation === "container" ? await launchContainer(cfg, opts, workdir, port) : launchProcess(cfg, opts, workdir, home, port, killGraceMs);
+  } catch (e) {
+    cleanup();
+    throw e;
+  }
+
+  let stopped: Promise<void> | undefined;
+  const stop = () =>
+    (stopped ??= (async () => {
+      await launched.stop();
       cleanup();
     })());
 
-  const ok = await waitReady(baseUrl + cfg.target.readyPath, Date.now() + readyTimeoutMs, () => exitCode !== undefined);
+  const ok = await waitReady(launched.baseUrl + cfg.target.readyPath, Date.now() + readyTimeoutMs, launched.exited);
   if (!ok) {
+    const code = launched.exitCode();
     const reason =
-      exitCode !== undefined
-        ? `target exited with code ${exitCode} before becoming ready`
+      code !== undefined
+        ? `target exited with code ${code} before becoming ready`
         : `target not ready: GET ${cfg.target.readyPath} did not return 200 within ${readyTimeoutMs}ms`;
-    const tail = lines.slice(-50);
+    const tail = launched.logs(50);
     await stop();
     throw new RunnerError(reason, tail);
   }
 
-  return { baseUrl, port, workdir, logs: (n = 50) => lines.slice(-n), stop };
+  return {
+    isolation,
+    image: launched.image ?? null,
+    baseUrl: launched.baseUrl,
+    port: Number(new URL(launched.baseUrl).port),
+    workdir,
+    logs: launched.logs,
+    stop,
+  };
 }

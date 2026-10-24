@@ -5,11 +5,15 @@
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
+import { createHash } from "node:crypto";
+import { existsSync, writeFileSync } from "node:fs";
+import { gitLab } from "../helpers/git-lab.js";
 import { join } from "node:path";
 import {
-  APPS, ROOT, cli, copyApp, hasCurl, isRed, manualExploit, pristineScan, readAll, redOn, scan, scanConfig, skipReason, variantConfig,
+  APPS, ROOT, cli, copyApp, hasCurl, hasDocker, isRed, manualExploit, pristineScan, readAll, redOn, scan, scanConfig, skipReason, variantConfig,
 } from "./helpers.js";
 
 const skip = skipReason();
@@ -201,6 +205,150 @@ describe("demo scenarios", { skip }, () => {
       assert.equal(read(r.out, "findings.json"), read(join(ROOT, "examples", "out"), "findings.json"), "findings.json: run `pnpm run examples:update`");
       const strip = (t: string) => { const m = JSON.parse(t); delete m.startedAt; delete m.finishedAt; delete m.durationMs; return m; };
       assert.deepEqual(strip(read(r.out, "scan-meta.json")), strip(read(join(ROOT, "examples", "out"), "scan-meta.json")), "scan-meta.json: run `pnpm run examples:update`");
+    });
+  });
+
+  describe("S13 container isolation gives the same answers (R6)", { skip: hasDocker() ? false : "docker not available" }, () => {
+    it("vendor-platform and realistic-app: byte-identical matrix and findings, isolation recorded", () => {
+      for (const app of APPS) {
+        const host = pristineScan(app);
+        const box = scan(join(copyApp(app), "argos.config.yaml"), ["--isolation", "container"]);
+        assert.equal(box.status, 0, box.stderr);
+        assert.match(box.stderr, /container isolation/);
+        assert.equal(readFileSync(join(box.out, "matrix.json"), "utf8"), readFileSync(join(host.out, "matrix.json"), "utf8"), `${app} matrix`);
+        assert.equal(readFileSync(join(box.out, "findings.json"), "utf8"), readFileSync(join(host.out, "findings.json"), "utf8"), `${app} findings`);
+        const meta = JSON.parse(readFileSync(join(box.out, "scan-meta.json"), "utf8"));
+        assert.equal(meta.isolation, "container");
+        assert.match(meta.image, /^node:\d+-slim$/);
+      }
+    });
+
+    it("fix verifies and applies the same patches inside the container", () => {
+      const dir = copyApp("vendor-platform");
+      const r = cli(["fix", "--config", join(dir, "argos.config.yaml"), "--out", join(dir, "o"), "--isolation", "container"]);
+      assert.equal(r.status, 0, r.stderr);
+      assert.match(r.stdout, /verified patch: limit columns/);
+      assert.match(r.stdout, /verified patch: scope GET \/api\/datasets\/:id/);
+    });
+
+    it("docker unavailable is exit 1 with a clear message, never a silent run on the host", () => {
+      const dir = copyApp("vendor-platform");
+      const r = spawnSync("node", ["--import", "tsx", "src/cli.ts", "scan", "--config", join(dir, "argos.config.yaml"), "--out", join(dir, "o"), "--isolation", "container"], {
+        cwd: ROOT, encoding: "utf8", env: { ...process.env, DOCKER_HOST: "unix:///nonexistent/docker.sock" },
+      });
+      assert.equal(r.status, 1);
+      assert.match(r.stderr, /argos: container isolation requested but docker is not available/);
+      assert.ok(!/findings:/.test(r.stdout), "nothing was scanned");
+    });
+
+    it("scan time in a container stays within the 60s target", (t) => {
+      const r = scanConfig(join(copyApp("vendor-platform"), "argos.config.yaml"), ["--isolation", "container"]);
+      t.diagnostic(`container scan vendor-platform: ${(r.ms / 1000).toFixed(1)}s`);
+      assert.ok(r.ms < 60_000, `${r.ms}ms`);
+    });
+  });
+
+  describe("S11 evidence report (criterion 3)", () => {
+    const sha = (p: string) => createHash("sha256").update(readFileSync(p, "utf8")).digest("hex");
+
+    it("`argos report` writes the header and its hashes match the files recomputed from disk", () => {
+      const r = pristineScan("vendor-platform");
+      const out = join(r.out, "report.md");
+      const run = cli(["report", "--scan", r.out]);
+      assert.equal(run.status, 0, run.stderr);
+      const md = readFileSync(out, "utf8");
+      for (const file of ["matrix.json", "findings.json"]) {
+        const m = new RegExp(`\\| ${file} \\| SHA-256 \`([0-9a-f]{16})…\``).exec(md);
+        assert.ok(m, file);
+        assert.equal(m![1], sha(join(r.out, file)).slice(0, 16), `${file} header hash is current`);
+      }
+      assert.match(md, /\| 대상 \| vendor-platform \|/);
+      assert.match(md, /보증하거나 규정 준수를 증명하지 않는다/);
+      assert.match(md, /무결성:\*\* matrix\.json ✅ 일치 · findings\.json ✅ 일치/);
+    });
+
+    it("a result file edited after the scan is refused (exit 1), not reported", () => {
+      const r = scan(join(copyApp("vendor-platform"), "argos.config.yaml"));
+      const f = join(r.out, "findings.json");
+      writeFileSync(f, readFileSync(f, "utf8").replace('"VULNERABLE"', '"OK"'));
+      const run = cli(["report", "--scan", r.out]);
+      assert.equal(run.status, 1);
+      assert.match(run.stderr, /argos: findings\.json does not match the hash/);
+      assert.ok(!existsSync(join(r.out, "report.md")));
+    });
+  });
+
+  describe("S14 `argos ci`: every check, verified fixes, fix PR, report", () => {
+    it("one command produces scan results, fix results, report and PR description; the source stays untouched", () => {
+      const dir = copyApp("vendor-platform");
+      const before = readFileSync(join(dir, "app.mjs"), "utf8");
+      const out = join(dir, "ci-out");
+      const r = cli(["ci", "--config", join(dir, "argos.config.yaml"), "--out", out]);
+      assert.equal(r.status, 0, r.stderr);
+      for (const f of ["report.md", "pr-body.md", "ci-summary.json", "fix.json", "before/findings.json", "after/findings.json"]) assert.ok(existsSync(join(out, f)), f);
+      const md = readFileSync(join(out, "report.md"), "utf8");
+      assert.match(md, /✅ 채택: limit columns/);
+      assert.match(md, /✅ 채택: scope GET \/api\/datasets\/:id/);
+      assert.match(md, /⚠️ 거부: scope POST \/api\/export/);
+      const s = JSON.parse(readFileSync(join(out, "ci-summary.json"), "utf8"));
+      assert.equal(s.patches.adopted, 2);
+      assert.equal(s.pr, null);
+      assert.equal(readFileSync(join(dir, "app.mjs"), "utf8"), before, "no PR / --apply: nothing is written");
+    });
+
+    it("--pr: a fix branch with exactly the verified patches, the PR body, and main left alone", () => {
+      const lab = gitLab(join(ROOT, "demo", "vendor-platform"));
+      const mainSha = lab.git("rev-parse", "main");
+      const out = join(lab.root, "ci-out");
+      const r = cli(["ci", "--config", join(lab.work, "argos.config.yaml"), "--out", out, "--pr"], { PATH: lab.path });
+      assert.equal(r.status, 0, r.stderr);
+      assert.match(r.stdout, /opened https:\/\/github\.com\/acme\/app\/pull\/42 \(branch argos\/fix-/);
+
+      const branch = /branch (argos\/fix-[\w-]+)/.exec(r.stdout)![1]!;
+      assert.equal(lab.git("rev-parse", "main"), mainSha, "main untouched");
+      assert.equal(lab.git("rev-parse", "--abbrev-ref", "HEAD"), "main", "checkout restored");
+      assert.equal(lab.git("show", "--name-only", "--format=", branch), "app.mjs", "only the patched file");
+      const patched = lab.git("show", `${branch}:app.mjs`);
+      assert.match(patched, /SELECT id, name, contact_email FROM vendors/);
+      assert.match(patched, /WHERE id = \? AND vendor_id = \?"\)\s*\.get\(req\.params\.id, req\.user\.vendor_id\)/);
+      assert.ok(lab.ghBody().includes("검증된 수정 2건"));
+      assert.match(lab.ghBody(), /보증하거나 규정 준수를 증명하지 않는다/);
+      assert.equal(lab.ghCalls().length, 1);
+    });
+
+    it("exit code follows the scanned code: block mode + red = 2, report mode = 0", () => {
+      const dir = copyApp("vendor-platform");
+      const block = variantConfig(dir, "block.yaml", (t) => t.replace(/^mode: report$/m, "mode: block"));
+      assert.equal(cli(["ci", "--config", block, "--out", join(dir, "o1")]).status, 2);
+      assert.equal(cli(["ci", "--config", join(dir, "argos.config.yaml"), "--out", join(dir, "o2")]).status, 0);
+    });
+
+    it("on the safe app there is nothing to fix and no PR", () => {
+      const lab = gitLab(join(ROOT, "demo", "realistic-app"));
+      const r = cli(["ci", "--config", join(lab.work, "argos.config.yaml"), "--out", join(lab.root, "o"), "--pr"], { PATH: lab.path });
+      assert.equal(r.status, 0, r.stderr);
+      assert.match(r.stdout, /no verified patch, so no PR was opened/);
+      assert.equal(lab.ghCalls().length, 0);
+      assert.equal(lab.git("branch", "--list", "argos/*"), "");
+    });
+
+    it("--pr in a dirty repo is refused with exit 1 and the report is still written", () => {
+      const lab = gitLab(join(ROOT, "demo", "vendor-platform"));
+      writeFileSync(join(lab.work, "app.mjs"), readFileSync(join(lab.work, "app.mjs"), "utf8") + "\n// local change\n");
+      const out = join(lab.root, "o");
+      const r = cli(["ci", "--config", join(lab.work, "argos.config.yaml"), "--out", out, "--pr"], { PATH: lab.path });
+      assert.equal(r.status, 1);
+      assert.match(r.stderr, /argos: the working tree has uncommitted changes/);
+      assert.ok(existsSync(join(out, "report.md")), "the evidence is not lost when the PR step fails");
+      assert.equal(lab.ghCalls().length, 0);
+    });
+
+    it("container isolation end to end: the report states the sandbox", { skip: hasDocker() ? false : "docker not available" }, () => {
+      const dir = copyApp("vendor-platform");
+      const out = join(dir, "o");
+      const r = cli(["ci", "--config", join(dir, "argos.config.yaml"), "--out", out, "--isolation", "container"]);
+      assert.equal(r.status, 0, r.stderr);
+      assert.match(readFileSync(join(out, "report.md"), "utf8"), /container \(`node:\d+-slim`: 네트워크 없음, 읽기 전용 루트, 비root\)/);
     });
   });
 

@@ -38,6 +38,17 @@ export const Config = z
       baseUrl: z.string().default("http://127.0.0.1:0"),
       readyPath: z.string().default("/health"),
       env: z.record(z.string(), z.string()).default({}),
+      /** process: run on the host (trusted code only). container: no network, read-only FS, non-root, limits. */
+      isolation: z.enum(["process", "container"]).default("process"),
+      container: z
+        .strictObject({
+          /** Needs `node` inside (the host reaches the app through `docker exec`). Default: node:<host major>-slim. */
+          image: z.string().min(1).optional(),
+          memory: z.string().default("512m"),
+          cpus: z.string().default("1"),
+          pids: z.number().int().positive().default(256),
+        })
+        .default({ memory: "512m", cpus: "1", pids: 256 }),
     }),
     seed: z
       .strictObject({

@@ -37,10 +37,11 @@
 | ✅ | secrets (c) 정적 스캔 | `src/checks/static-secrets.ts` | 10개 |
 | ✅ | scan 명령 (fixture e2e) | `src/scan.ts`, `src/cli.ts` | 11개 |
 | ✅ | fix (규칙 기반 + 제안별 누적 재검증) | `src/fix/*` | 12개 |
-| ✅ | 시나리오 (데모 앱, 실제 CLI) | `test/scenarios/*` | 16개 |
+| ✅ | 시나리오 (데모 앱, 실제 CLI) | `test/scenarios/*` | 20개 |
+| ✅ | 컨테이너 격리 | `src/container.ts`, `src/runner.ts` | 10개 |
 | ✅ | 출력 예시 + `scan-meta.json` | `examples/out/*`, `src/types.ts`(`ScanMeta`) | 3개 |
 
-단위 테스트 96개 + 시나리오 16개 모두 통과.
+단위 테스트 127개 + 시나리오 28개 모두 통과.
 
 ## 완료 내용
 
@@ -54,6 +55,8 @@
 - **scan:** `argos scan [--config] [--checks] [--out] [--timeout]`. 임시 복사본 → 시드 → 앱 기동 → 매트릭스 → 점검 → `out/matrix.json`, `out/findings.json`. 종료 코드 0/1/2, 전체 타임아웃 기본 5분.
 - **scan-meta.json:** `scan`이 `out/scan-meta.json`도 쓴다(`ScanMeta` 계약). 증빙 헤더 재료: 설정·시드 스키마·`matrix.json`·`findings.json`의 SHA-256, 실행 시각(UTC), 도구 버전, 점검·페르소나·시험 리소스 목록, 판정별 개수. 절대 경로·비밀 없음. A의 `report`는 해시를 직접 계산하지 않고 이 파일을 읽으면 된다.
 - **출력 예시:** `examples/out/`(`matrix.json`, `findings.json`, `scan-meta.json`, `README.md`). `vendor-platform` 실제 스캔 결과이고 필드 설명이 README에 있다. 테스트가 스키마·해시·최신 여부를 지킨다.
+- **컨테이너 격리 (SPEC R6):** `target.isolation: container` 또는 `--isolation container`(scan·fix). `--network none`(루프백만), 루트 읽기 전용(`/tmp` tmpfs, `/app`은 임시 복사본), 비root(호스트 uid), `--cap-drop ALL`, `no-new-privileges`, pids/memory/cpus 제한, 호스트 환경변수 없음. 포트를 게시할 수 없으므로 호스트 loopback TCP 포워더가 연결마다 `docker exec -i … node -e`로 컨테이너 안 루프백에 이어 준다(이미지에 `node` 필요, 기본 `node:<호스트 major>-slim`). 도커가 없으면 호스트로 대체하지 않고 종료 코드 1. 프로브 앱으로 실측: 외부 접속 `ENETUNREACH`/`EAI_AGAIN`, `/etc` 쓰기 `EROFS`, uid≠0, `CapEff=0`(같은 프로브가 bridge 네트워크에서는 외부 접속 성공 → 테스트가 샌드박스를 검증). 데모 앱 2개에서 프로세스와 `matrix.json`/`findings.json` 바이트 동일, 컨테이너 scan 1.5초. `scan-meta.json`에 `isolation`, `image` 기록. 한계: `node` 필요, 컨테이너(Linux)에서 동작하는 의존성 필요.
+- **report / ci / PR:** `argos report [--scan] [--fix] [--out]`는 `matrix.json`·`findings.json`·`scan-meta.json`(+`fix.json`)에서 증빙 리포트를 만든다(증빙 헤더, 시험 범위, 요약, 🔴 목록, 매트릭스, 점검별 결과, 수정 결과, 한계 문구). 해시를 파일에서 다시 계산해 `scan-meta`와 다르면 거부한다. `argos ci`는 scan + 제안별 수정 검증 + `out/report.md` + `out/pr-body.md` + `out/ci-summary.json`을 한 번에 만들고, `--apply`는 작업 트리에, `--pr`은 수정 브랜치 push + `gh pr create`까지 한다(더러운 작업 트리 거부, 채택된 파일만 커밋, 끝나면 원래 브랜치 복귀). 종료 코드는 원본 코드 기준. `src/report.ts`는 A 몫이었으나 `ci`에 필요해 B가 첫 버전을 작성했다.
 - **secrets (c):** 소스에서 `sk-…`, `AKIA…`, 개인 키 블록, `*_secret/token/password/api_key = "…"` 패턴 검색. 휴리스틱이라 🟡(SUSPECTED)만 낸다. 값은 앞 4자 + 길이로만 표시하고 소스 줄은 싣지 않는다. 시드·테스트·fixtures·examples·`argos*.yaml`·`node_modules`·락 파일·`.env.example`은 기본 제외, `secrets.staticScan: false`로 끄고 `secrets.staticExclude`로 경로를 더한다. Finding은 `resourceId: "(source)"`, `persona: "(static)"`, `proof.request: "<파일>:<줄>"`.
 - **fix:** `argos fix [--config] [--out] [--apply]`. 기계적으로 고치는 것은 두 가지다. ① `SELECT * FROM <table>` → 비민감 컬럼 목록. ② (설정에 `fix.principal`이 있을 때) 라우트 핸들러 안의 `SELECT … WHERE … = ?`에 `AND <소유 컬럼> = ?`와 호출자 값(`req.user.vendor_id`)을 붙임. 그 외(인증·파라미터화·환경 노출·하드코딩)는 수정 지침만 출력. 제안마다 임시 복사본에 **누적 적용**하고 **같은 매트릭스를 다시 실행**해 ① 대상 Finding 해결 ② 대조 칸 유지 ③ 새 🔴 없음 ④ 앱 기동일 때만 채택한다. 실패한 제안만 거부되고 나머지는 채택된다(예: 인증 없는 `/api/export`의 소유자 검사는 `req.user`가 없어 거부). 원본은 `--apply`일 때 채택된 것만 수정. 결과는 `out/before/`, `out/after/`, `out/fix.json`(제안별 `status`·`reasons`).
 
@@ -85,6 +88,7 @@
 | S7 | 모드와 종료 코드 | `mode: report`는 🔴이 있어도 0, `mode: block`은 2 |
 | S8 | 같은 설정으로 두 번 돌린다 | 두 매트릭스가 같다 (재현성) |
 | S9 | 결과 파일이 안전하다 | `matrix.json`, `findings.json`, `fix.json`에 마커·비밀·카나리 전체 값이 없다 |
+| S13 | 컨테이너 격리가 같은 결과를 낸다 | 두 데모 앱의 매트릭스·findings가 프로세스와 동일, `fix`도 컨테이너에서 동작, 도커 불가는 exit 1 |
 | S12 | 출력 예시가 최신이다 | `examples/out/`가 새로 스캔한 결과와 일치(시각 제외) |
 | S10 | 시연 3분 흐름 | `scan` → `fix` → 재스캔의 총 시간을 재서 기록 (목표 60초/scan, 기준 6) |
 | S0, S11 | (A 구현 후 추가) | `init` 초안이 스키마를 통과하고 기동 검증까지, `report` 증빙 헤더 해시가 재계산 값과 일치 (기준 3·4) |
@@ -105,7 +109,7 @@
 pnpm install                 # 최초 1회
 (cd demo/vendor-platform && npm install)   # 데모 앱 의존성 (realistic-app도 동일)
 pnpm run typecheck           # 타입 검사
-pnpm test                    # 단위 96개 + 시나리오 16개
+pnpm test                    # 단위 127개 + 시나리오 28개
 pnpm run examples:update     # examples/out 재생성 (출력 형식·데모 앱이 바뀌었을 때)
 pnpm run test:scenarios      # 시나리오만 (데모 앱 실제 CLI)
 
@@ -153,14 +157,14 @@ pnpm argos scan --config test/fixtures/vuln-app/block.config.yaml; echo $?      
 
 ## 막힌 것 / 의존
 
-- 8-1, 8-2 완료. 남은 것은 8-3.
+- 8-1, 8-2 완료. 남은 것은 8-3. 주제별 정리는 `prd/`.
 - 8-3은 A의 `src/report.ts`, `src/init/` push 이후. `cli.ts` 연결은 B 소유(ROLE.md 경계 규칙).
-- 작업 트리에 `demo/clean` → `demo/realistic-app` 이름 변경이 미커밋 상태로 있다(다른 쪽 작업). 시나리오는 `realistic-app` 기준.
 
 ## git
 
 - `feature/sun`, `main`: `2a90f55`까지 push (데모 앱 대응 수정·secrets (b) 포함).
 - `feature/sun`, `main`: `99ee2e3`까지 push (시나리오 테스트, `demo/realistic-app` 이름 변경 포함).
 - `feature/sun`, `main`: `edca2c3`까지 push (scan-meta.json, 출력 예시 포함).
-- 미커밋: secrets (c), 소유자 검사 자동 수정, 제안별 누적 검증, 데모 설정의 `fix.principal`, 예시 재생성, 이 문서.
+- `feature/sun`, `main`: `c655567`까지 push (secrets (c), 소유자 검사 자동 수정 포함).
+- 미커밋: 컨테이너 격리(`src/container.ts` 등), `scan-meta.json`의 `isolation`/`image`, `prd/` 문서, 이 문서.
 - (이전 기록) `demo/` 이름 변경(`clean` → `realistic-app`), `docs/SPEC.md`·`test/demo-config.test.ts`의 이름 반영.

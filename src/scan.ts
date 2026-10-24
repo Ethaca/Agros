@@ -3,7 +3,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { CHECKS, runChecks } from "./checks/index.js";
 import { loadConfig, ConfigError } from "./config.js";
 import { renderMatrixMarkdown, runMatrixDetailed } from "./matrix.js";
-import { startTarget } from "./runner.js";
+import { startTarget, type Isolation } from "./runner.js";
 import { hashConfigText, makeEnvCanaries, seedDatabase, type SeedManifest } from "./seed.js";
 
 const TOOL_VERSION = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
@@ -22,6 +22,8 @@ export interface ScanOptions {
   log?: (line: string) => void;
   /** Edit the temp copy before it is seeded and started (used by `fix` to re-verify a patch). */
   patch?: (workdir: string) => void;
+  /** Overrides target.isolation from the config. */
+  isolation?: Isolation;
 }
 
 export interface ScanResult {
@@ -64,11 +66,13 @@ export async function runScan(opts: ScanOptions): Promise<ScanResult> {
 
   let target: Awaited<ReturnType<typeof startTarget>> | undefined;
   let aborted = false;
+  let ran: { isolation: Isolation; image: string | null } = { isolation: opts.isolation ?? cfg.target.isolation, image: null };
   try {
     const work = (async () => {
       target = await startTarget(cfg, {
         baseDir: dirname(configPath),
         quiet: opts.quiet,
+        isolation: opts.isolation,
         extraEnv: Object.fromEntries(envCanaries.map((k) => [k.name, k.marker])),
         beforeStart: (workdir) => {
           opts.patch?.(workdir);
@@ -80,6 +84,7 @@ export async function runScan(opts: ScanOptions): Promise<ScanResult> {
         await target.stop();
         throw new ScanError("aborted");
       }
+      ran = { isolation: target.isolation, image: target.image };
       const { matrix, raw } = await runMatrixDetailed(cfg, target.baseUrl, manifest);
       const findings = await runChecks({ cfg, baseUrl: target.baseUrl, matrix, raw, manifest, srcDir: resolve(dirname(configPath), cfg.target.cwd) });
       return { matrix, findings };
@@ -108,6 +113,8 @@ export async function runScan(opts: ScanOptions): Promise<ScanResult> {
       durationMs: finishedAt.getTime() - startedAt.getTime(),
       target: basename(dirname(configPath)),
       mode: cfg.mode,
+      isolation: ran.isolation,
+      image: ran.image,
       config: { file: basename(configPath), sha256: hashConfigText(configText) },
       seed: cfg.seed && schemaPath && existsSync(schemaPath)
         ? { schema: { file: cfg.seed.schema, sha256: hashConfigText(readFileSync(schemaPath, "utf8")) }, rows: null }

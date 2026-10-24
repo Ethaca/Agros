@@ -70,6 +70,10 @@ export const ScanMeta = z.strictObject({
   /** Name of the directory holding the config (identifies the target in a report). */
   target: z.string(),
   mode: z.enum(["report", "block"]),
+  /** How the target ran. "process" = host process (trusted code only); "container" = no network, read-only FS, non-root. */
+  isolation: z.enum(["process", "container"]),
+  /** Container image (null for process isolation). */
+  image: z.string().nullable(),
   config: z.strictObject({ file: z.string(), sha256: Sha256 }),
   /** Source files the DB was seeded from. rows is null until seed.rows is supported. */
   seed: z

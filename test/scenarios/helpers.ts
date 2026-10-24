@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { dockerStatus } from "../../src/container.js";
 import type { Finding, Matrix, Verdict } from "../../src/types.js";
 
 export const ROOT = resolve(".");
@@ -13,6 +14,8 @@ export const skipReason = (): string | false => {
   const missing = APPS.filter((a) => !existsSync(join(ROOT, "demo", a, "node_modules")));
   return missing.length ? `demo dependencies missing (run: cd demo/${missing[0]} && npm install)` : false;
 };
+
+export const hasDocker = (): boolean => dockerStatus().ok;
 
 export const hasCurl = (): boolean => spawnSync("curl", ["--version"]).status === 0;
 
@@ -37,9 +40,9 @@ export interface CliResult {
   ms: number;
 }
 
-export function cli(args: string[]): CliResult {
+export function cli(args: string[], env: NodeJS.ProcessEnv = {}): CliResult {
   const t0 = Date.now();
-  const r = spawnSync("node", ["--import", "tsx", "src/cli.ts", ...args], { cwd: ROOT, encoding: "utf8", timeout: 170_000 });
+  const r = spawnSync("node", ["--import", "tsx", "src/cli.ts", ...args], { cwd: ROOT, encoding: "utf8", timeout: 170_000, env: { ...process.env, ...env } });
   return { status: r.status, stdout: r.stdout, stderr: r.stderr, ms: Date.now() - t0 };
 }
 

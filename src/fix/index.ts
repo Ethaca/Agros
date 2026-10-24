@@ -13,6 +13,8 @@ export interface FixOptions {
   /** Write the adopted patches to the original files. Default false (F5). */
   apply?: boolean;
   timeoutMs?: number;
+  /** Overrides target.isolation from the config. */
+  isolation?: "process" | "container";
   quiet?: boolean;
   log?: (line: string) => void;
 }
@@ -52,7 +54,7 @@ export async function runFix(opts: FixOptions): Promise<FixReport> {
   const configPath = resolve(opts.configPath);
   const cfg = loadConfig(configPath);
   const srcDir = resolve(dirname(configPath), cfg.target.cwd);
-  const common = { configPath, quiet: opts.quiet, timeoutMs: opts.timeoutMs, log: () => {} };
+  const common = { configPath, quiet: opts.quiet, timeoutMs: opts.timeoutMs, isolation: opts.isolation, log: () => {} };
 
   const before = await runScan({ ...common, outDir: join(opts.outDir, "before") });
   const proposals = proposeFixes(cfg, before.findings, srcDir);

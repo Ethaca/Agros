@@ -3,11 +3,13 @@
     "name": "argos",
     "version": "0.0.0"
   },
-  "startedAt": "2026-10-24T04:41:50.954Z",
-  "finishedAt": "2026-10-24T04:41:51.393Z",
-  "durationMs": 439,
+  "startedAt": "2026-10-24T04:49:17.158Z",
+  "finishedAt": "2026-10-24T04:49:17.669Z",
+  "durationMs": 511,
   "target": "vendor-platform",
   "mode": "report",
+  "isolation": "process",
+  "image": null,
   "config": {
     "file": "argos.config.yaml",
     "sha256": "42d07c29ab032240f16607a8cf4d24c5ef65bf4f82c1a150b1d6ab27fc196143"
