@@ -47,6 +47,21 @@
 ## 비개발자용 PR 메시지
 PR 본문과 보고서 상단에 **전문 용어 없이** 다음을 담는다: 무슨 일이 있었나(예: "벤더 B가 벤더 A의 데이터를 볼 수 있었습니다"), 왜 문제인가, 무엇을 고쳤나(변경 줄 수), 어떻게 확인했나("같은 공격을 다시 해 봤고 더 이상 통하지 않습니다"), 사람이 해야 할 일. 사실은 발견(findings)에서 **템플릿으로 만든다**(LLM이 없는 사실을 지어내지 않게). LLM은 문장을 다듬는 데만 쓰고 숫자·이름은 바꾸지 못하게 한다. 기술 상세는 보고서에 둔다.
 
+## GitHub Actions에서 PR 권한
+**가능하지만 세 가지가 맞아야 한다.** (GitHub 문서에 있는 동작에 대한 정리이며, 이 저장소에서는 로컬 bare 저장소와 가짜 `gh`로만 시험했다. 실제 GitHub에서의 확인은 아직 하지 않았다.)
+1. 워크플로의 `permissions:`에 `contents: write`(브랜치 push)와 `pull-requests: write`(PR 생성)를 명시한다. 기본 `GITHUB_TOKEN` 권한은 저장소·조직 설정에 따라 읽기 전용일 수 있다.
+2. 저장소(또는 조직) 설정 **Settings → Actions → General → Workflow permissions → "Allow GitHub Actions to create and approve pull requests"**가 켜져 있어야 한다. 꺼져 있으면 브랜치는 push되지만 `gh pr create`가 실패한다. 조직 관리자가 막아 둔 경우가 흔하다. 이때 `argos ci`는 실패하지 않고 "브랜치는 push됐고 PR은 직접 열어야 한다"는 경고를 남긴다(시험됨).
+3. `gh`가 토큰을 쓰도록 `env: GH_TOKEN: ${{ github.token }}`, 체크아웃은 PR의 head 커밋.
+
+| 상황 | 결과 |
+|---|---|
+| 포크에서 온 PR | 읽기 전용 토큰이라 push 불가 → 검사와 보고서만, PR은 건너뜀. `pull_request_target`(쓰기 토큰 + 포크 코드 실행)은 쓰지 않는다 |
+| `GITHUB_TOKEN`으로 만든 push·PR | **다른 워크플로를 트리거하지 않는다.** 루프 방지에는 유리하지만 수정 PR에 사용자의 CI가 돌지 않는다. 돌리려면 GitHub App 토큰이나 PAT가 필요하다 |
+| 브랜치 보호·서명 커밋 요구 같은 조직 정책 | push·PR이 막힐 수 있다 |
+| GitHub App 방식 | App에 Contents/Pull requests 쓰기 권한을 주므로 위 설정이 필요 없고 트리거 문제도 없다 |
+
+**권한 분리:** 고객 코드를 실행하는 검사 job은 `contents: read` + `persist-credentials: false`로, 게시 job만 쓰기 권한을 갖게 한다. 그러려면 검사와 게시를 나누는 `argos publish`가 필요하다(로드맵).
+
 ## 설정·보고서 PR
 검증된 코드 수정이 없어도 **설정(`init`/`--update`)과 보고서를 PR로 올리는 것**이 목표 흐름의 일부다(구현 예정). 설정 PR이 사람이 `ai-draft` 규칙을 확인하는 절차가 되고, 확인되지 않은 규칙은 보고서에 "미확인"으로 남는다. 코드 수정 PR과 설정 PR은 별개의 브랜치·PR로 분리한다.
 

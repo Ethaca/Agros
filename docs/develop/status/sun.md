@@ -146,6 +146,9 @@ pnpm argos scan --config test/fixtures/vuln-app/block.config.yaml; echo $?      
 ## `argos init` v1 (정적 규칙, LLM 없음)
 `argos init [dir] [--out] [--report] [--isolation] [--start] [--no-verify] [--force]`: 저장소를 읽어(라우트·인증·테이블·소유 컬럼·시험 토큰·호출자 식) `argos.config.yaml` 초안을 주석과 함께 쓰고, 앱을 기동해 각 페르소나가 자기 데이터를 읽는지 검증한 뒤 `out/init-report.md`(확인 목록·시험 못 한 경로·검증 결과·T1/K)와 `init-egress.json`을 남긴다. 기대 규칙은 코드에서 추정하지 않고 보수적 기본값이며 모두 `provenance: ai-draft`, 보고서가 "미확인 기대 규칙"으로 경고한다. 데모 앱(설정 삭제): T1 0.6초, 수기 설정과 🔴 집합 일치(업무 규칙 하나만 다름). 남은 것: LLM 초안, `--update`/`--check`, 코드 밖 근거. 상세·상태는 `prd/12-init.md`.
 
+## 의존성 고정 (임시)
+`main`의 락 파일이 pnpm의 최소 릴리스 경과 시간 정책(기본 24시간)을 거치지 않고 만들어져 `pnpm install`이 실패했다(`@anthropic-ai/sdk@1.3.0`, `@babel/runtime@8.0.8`이 하루 이내 배포). 정책은 그대로 두고 락 파일을 정책 안에서 다시 해석해 **두 패키지만** 통과하는 버전으로 내렸다: `@anthropic-ai/sdk` 1.3.0 → **1.1.0**(`apps/web/package.json`의 하한을 `^1.3.0` → `^1.1.0`으로 낮춤), `@babel/runtime` 8.0.8 → **8.0.7**. 203개 패키지 중 이 둘만 바뀌었고, 웹 앱 타입체크와 테스트 37개, 루트 테스트가 통과한다. 2026-10-25 이후에는 `pnpm update -r @anthropic-ai/sdk`로 최신으로 올릴 수 있고, 그 뒤 하한을 되돌려도 된다.
+
 ## 알아둘 것
 
 - **A에게 알릴 계약 추가:** `MatrixCell.target`, `SeedManifest.ids`/`envCanaries`, 라우트의 `?search=`를 sqli가 읽는 것(리소스 `params`도 가능), `ScanMeta`. `report`는 `out/matrix.json`, `out/findings.json`, `out/scan-meta.json`을 읽는다(예시: `examples/out/`).
