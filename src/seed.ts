@@ -27,6 +27,8 @@ export interface SeedManifest {
   ids: Record<string, Record<string, string | number>>;
   /** Injected environment canaries (secrets check b). */
   envCanaries?: EnvCanary[];
+  /** Run-time credentials (minted tokens, DB password, ...): replaced entirely by redact(). In memory only. */
+  credentials?: string[];
 }
 
 /** All owner-data markers seeded for `org`, across tables: any of them in a response means that org's data. */
@@ -69,9 +71,19 @@ export function allMarkers(m: SeedManifest): string[] {
   ];
 }
 
-/** Replace any full marker in `text` with its masked form, so evidence never carries a full value. */
+const JWT_RE = /eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]*/g;
+const BEARER_RE = /(Bearer\s+)[A-Za-z0-9._~+/=-]{8,}/gi;
+const JWK_RE = /"(n|e|d|p|q|dp|dq|qi|k|x|y)"(\s*:\s*)"[A-Za-z0-9_-]{16,}"/g;
+const PEM_RE = /-----BEGIN [A-Z ]+-----[\s\S]*?-----END [A-Z ]+-----/g;
+
+/**
+ * Replace any full marker in `text` with its masked form, so evidence never carries a full value.
+ * Credentials of the run (tokens, DB password), anything JWT-shaped, Bearer values and PEM keys are removed.
+ */
 export function redact(text: string, m: SeedManifest): string {
   let out = text;
+  for (const c of (m.credentials ?? []).filter((x) => x.length >= 4).sort((a, b) => b.length - a.length)) out = out.split(c).join("[redacted]");
+  out = out.replace(JWT_RE, "[redacted-jwt]").replace(BEARER_RE, "$1[redacted]").replace(PEM_RE, "[redacted-key]").replace(JWK_RE, '"$1"$2"[redacted]"');
   for (const marker of allMarkers(m).sort((a, b) => b.length - a.length)) {
     out = out.split(marker).join(`${maskMarker(marker)}…`);
   }

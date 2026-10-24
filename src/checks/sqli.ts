@@ -10,6 +10,8 @@ const show = (r: HttpResult) => (r.status === null ? `no response (${r.error})` 
 export interface SqliOptions {
   timeoutMs?: number;
   maxResponseBytes?: number;
+  /** persona name -> minted token (jwt personas). */
+  tokens?: Record<string, string>;
 }
 
 /**
@@ -19,7 +21,7 @@ export interface SqliOptions {
  */
 export async function sqli(cfg: Config, baseUrl: string, manifest: SeedManifest, opts: SqliOptions = {}): Promise<Finding[]> {
   const out: Finding[] = [];
-  const authed = cfg.personas.find((p) => p.auth.type === "bearer");
+  const authed = cfg.personas.find((p) => p.auth.type === "bearer" || (p.auth.type === "jwt" && !p.invalid && !!opts.tokens?.[p.name]));
   const anon = cfg.personas.find((p) => p.auth.type === "none");
 
   for (const r of cfg.resources) {
@@ -35,7 +37,7 @@ export async function sqli(cfg: Config, baseUrl: string, manifest: SeedManifest,
     const filled = fillPath(path, rowId);
 
     for (const param of params) {
-      const send = (value: string) => sendAs(baseUrl, persona, method, filled, { query: { [param]: value }, timeoutMs: opts.timeoutMs, maxResponseBytes: opts.maxResponseBytes });
+      const send = (value: string) => sendAs(baseUrl, persona, method, filled, { query: { [param]: value }, timeoutMs: opts.timeoutMs, maxResponseBytes: opts.maxResponseBytes, token: opts.tokens?.[persona.name] });
       const control = await send("1");
       if (!is2xx(control)) {
         out.push(skip(r.id, persona.name, control.request, `control request failed (${show(control)}); cannot judge injection on "${param}"`));

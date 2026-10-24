@@ -29,6 +29,11 @@ const TEXT = {
     confirmState: "Config confirmation",
     unconfirmedCount: (n: number) => `**${n} AI draft field${n === 1 ? "" : "s"} unconfirmed** (expectations, public flags or safe flags no person has confirmed yet)`,
     allConfirmed: "all confirmed by a person",
+    runtime: "Runtime", jvm: (db: string) => `jvm${db ? ` · ${db}` : ""} · test JWT issuer (per-run keys)`,
+    seedTables: (n: number) => `${n} seeded table${n === 1 ? "" : "s"}`,
+    unverified: (n: number) => `## ⚪ Not verified (${n})`,
+    unverifiedNote: "No conclusion was drawn for the items below. **This does not mean they are safe.**",
+    unverifiedCols: "| Scope | Reason |",
     personas: "Personas",
     integrity: "**Integrity:**", match: "✅ match", mismatch: "❌ mismatch",
     integrityNote: "(header hashes compared with values recomputed from the files)",
@@ -74,6 +79,11 @@ const TEXT = {
     confirmState: "설정 확인 상태",
     unconfirmedCount: (n: number) => `**AI 초안 ${n}개 미확인** (사람이 확인하기 전의 기대 규칙·공개 여부·안전 표시)`,
     allConfirmed: "모두 사람이 확인함",
+    runtime: "런타임", jvm: (db: string) => `jvm${db ? ` · ${db}` : ""} · 테스트 JWT issuer (실행별 키)`,
+    seedTables: (n: number) => `시드 테이블 ${n}개`,
+    unverified: (n: number) => `## ⚪ 미검증 범위 (${n})`,
+    unverifiedNote: "아래 항목은 결론을 내지 않았다. **안전하다는 뜻이 아니다.**",
+    unverifiedCols: "| 범위 | 이유 |",
     personas: "페르소나",
     integrity: "**무결성:**", match: "✅ 일치", mismatch: "❌ 불일치",
     integrityNote: "(헤더의 해시를 파일에서 다시 계산한 값과 비교)",
@@ -201,6 +211,7 @@ export function renderReport(scan: LoadedScan, opts: RenderOptions = {}): string
   push(`| ${T.time} | ${meta.startedAt} → ${meta.finishedAt} (${T.seconds((meta.durationMs / 1000).toFixed(1))}) |`);
   push(`| ${T.tool} | ${meta.tool.name} ${meta.tool.version} |`);
   push(`| ${T.isolation} | ${meta.isolation === "container" ? T.container(meta.image ?? "") : T.process} |`);
+  if (meta.runtime === "jvm") push(`| ${T.runtime} | ${T.jvm(meta.db ? `${meta.db.kind} (\`${cell(meta.db.image)}\`, migrations: ${meta.db.migrations}, ${T.seedTables(meta.db.tables)})` : "")} |`);
   push(`| ${T.mode} | ${meta.mode} |`);
   push(`| ${T.configFile} | \`${cell(meta.config.file)}\` SHA-256 ${short(meta.config.sha256)} |`);
   push(`| ${T.seedSchema} | ${meta.seed ? `\`${cell(meta.seed.schema.file)}\` SHA-256 ${short(meta.seed.schema.sha256)}` : T.none} |`);
@@ -219,6 +230,12 @@ export function renderReport(scan: LoadedScan, opts: RenderOptions = {}): string
     push(T.unconfirmedWarn(meta.unconfirmed.length), "");
     for (const k of meta.unconfirmed.slice(0, 12)) push(`> - \`${cell(k)}\``);
     if (meta.unconfirmed.length > 12) push(`> - ${T.andMore(meta.unconfirmed.length - 12)}`);
+    push("");
+  }
+
+  if (meta.unverified?.length) {
+    push(T.unverified(meta.unverified.length), "", T.unverifiedNote, "", T.unverifiedCols, "|---|---|");
+    for (const u of meta.unverified) push(`| \`${cell(u.scope)}\` | ${cell(u.reason)} |`);
     push("");
   }
 

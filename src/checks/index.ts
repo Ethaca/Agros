@@ -17,6 +17,8 @@ export interface CheckContext {
   manifest: SeedManifest;
   /** Original target directory (for the static source scan). */
   srcDir: string;
+  /** persona name -> minted token (runtime jvm). Never serialized. */
+  tokens?: Record<string, string>;
   httpLimits?: { timeoutMs?: number; maxResponseBytes?: number };
 }
 
@@ -25,7 +27,7 @@ type CheckFn = (ctx: CheckContext) => Finding[] | Promise<Finding[]>;
 export const CHECKS: Record<Finding["check"], CheckFn> = {
   bola: (c) => bola(c.cfg, c.matrix),
   unauth: (c) => unauth(c.cfg, c.matrix),
-  sqli: (c) => sqli(c.cfg, c.baseUrl, c.manifest, c.httpLimits),
+  sqli: (c) => sqli(c.cfg, c.baseUrl, c.manifest, { ...c.httpLimits, tokens: c.tokens }),
   secrets: (c) => [...secrets(c.cfg, c.matrix, c.raw, c.manifest), ...(c.cfg.secrets.staticScan ? staticSecrets(c.cfg, c.srcDir) : [])],
 };
 

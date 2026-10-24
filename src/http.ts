@@ -18,6 +18,8 @@ export interface RequestOptions {
   /** JSON body for non-GET requests. */
   json?: unknown;
   query?: Record<string, string>;
+  /** Bearer token for jwt personas (minted per run; never stored in config or evidence). */
+  token?: string;
 }
 
 export const REQUEST_TIMEOUT_MS = 5_000;
@@ -30,13 +32,22 @@ export function parseRoute(route: string): { method: string; path: string; query
   return { method: method!, path: path!, queryNames };
 }
 
-/** Fill `:name` params. All params get the same value (one id per request). */
+/** Fill `:name` / `{name}` params. All params get the same value (one id per request). */
 export function fillPath(path: string, id: string | number): string {
-  return path.replace(/:[A-Za-z_][A-Za-z0-9_]*/g, encodeURIComponent(String(id)));
+  return fillParams(path, () => id);
 }
 
-export function authHeaders(persona: Persona): Record<string, string> {
-  return persona.auth.type === "bearer" ? { authorization: `Bearer ${persona.auth.token}` } : {};
+/** Fill each `:name` / `{name}` param with its own value. */
+export function fillParams(path: string, value: (name: string) => string | number): string {
+  return path.replace(/:([A-Za-z_][A-Za-z0-9_]*)|\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_m, a: string | undefined, b: string | undefined) =>
+    encodeURIComponent(String(value((a ?? b)!))),
+  );
+}
+
+export function authHeaders(persona: Persona, token?: string): Record<string, string> {
+  if (persona.auth.type === "bearer") return { authorization: `Bearer ${persona.auth.token}` };
+  if (persona.auth.type === "jwt" && token) return { authorization: `Bearer ${token}` };
+  return {};
 }
 
 /** Never throws: network failures come back as `error` so callers can mark the cell SKIPPED, not "safe". */
@@ -54,7 +65,7 @@ export async function sendAs(
     const res = await fetch(baseUrl + path + qs, {
       method,
       redirect: "manual",
-      headers: { ...authHeaders(persona), ...(hasBody ? { "content-type": "application/json" } : {}) },
+      headers: { ...authHeaders(persona, opts.token), ...(hasBody ? { "content-type": "application/json" } : {}) },
       body: hasBody ? JSON.stringify(opts.json) : undefined,
       signal: AbortSignal.timeout(opts.timeoutMs ?? REQUEST_TIMEOUT_MS),
     });

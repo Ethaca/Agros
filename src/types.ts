@@ -29,6 +29,16 @@ export const MatrixCell = z.strictObject({
   resource: z.string(),
   /** Org whose data was requested (the persona's own org, or a foreign one). Absent for resources without rows. */
   target: z.string().optional(),
+  /** User whose row was requested (user-scoped rows, or another user of the same org). Absent for org-level data. */
+  targetUser: z.string().optional(),
+  /**
+   * Only for relations the persona/target pair cannot express on its own: "same-org" (another user of the
+   * caller's org), "role" (caller's role is not allowed), "invalid-token" (wrong signature / expired).
+   * Absent = derived: anonymous / own (target = caller's org) / other-org.
+   */
+  relation: z.enum(["same-org", "role", "invalid-token"]).optional(),
+  /** read / create / update / delete. Absent = derived from the HTTP method. */
+  action: z.enum(["read", "create", "update", "delete"]).optional(),
   expected: Access,
   observed: Observed,
   verdict: Verdict,
@@ -99,6 +109,14 @@ export const ScanMeta = z.strictObject({
     findings: z.number().int(),
     counts: z.strictObject({ VULNERABLE: z.number().int(), SUSPECTED: z.number().int(), OK: z.number().int(), SKIPPED: z.number().int() }),
   }),
+  /** node (absent in older files) or jvm. */
+  runtime: z.enum(["node", "jvm"]).optional(),
+  /** Per-run database (jvm). No connection details, no credentials. */
+  db: z.strictObject({ kind: z.literal("postgres"), image: z.string(), migrations: z.string(), tables: z.number().int() }).optional(),
+  /** Scope that could not be verified, with the reason (e.g. auth precheck failed, marker not observable). */
+  unverified: z.array(z.strictObject({ scope: z.string(), reason: z.string() })).optional(),
+  /** What the run did (build tool, images, injected setting names). No values. */
+  notes: z.array(z.string()).optional(),
   files: z.strictObject({
     matrix: z.strictObject({ file: z.literal("matrix.json"), sha256: Sha256 }),
     findings: z.strictObject({ file: z.literal("findings.json"), sha256: Sha256 }),

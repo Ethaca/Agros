@@ -1,10 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { CHECKS, runChecks } from "./checks/index.js";
-import { loadConfig, ConfigError } from "./config.js";
-import { renderMatrixMarkdown, runMatrixDetailed } from "./matrix.js";
-import { startTarget, type Isolation } from "./runner.js";
-import { hashConfigText, makeEnvCanaries, seedDatabase, type SeedManifest } from "./seed.js";
+import { dbImageOf, loadConfig, ConfigError } from "./config.js";
+import { authPrecheck, renderMatrixMarkdown, runMatrixDetailed, type MatrixOptions } from "./matrix.js";
+import { startTarget, type Isolation, type RunningTarget } from "./runner.js";
+import { hashConfigText, makeEnvCanaries, redact, seedDatabase, SeedError, type SeedManifest } from "./seed.js";
+import { seedPostgres, type PgSeedManifest } from "./seed-pg.js";
+import { mintPersonaTokens } from "./tokens.js";
 
 const TOOL_VERSION = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
 import { CheckName, type Finding, type Matrix, type ScanMeta, type Verdict } from "./types.js";
@@ -16,7 +18,7 @@ export interface ScanOptions {
   /** Override config `checks` (comma list already split). */
   checks?: string[];
   outDir: string;
-  /** Whole-scan timeout. Default 5 minutes (R5). */
+  /** Whole-scan timeout. Default 5 minutes (R5); 25 minutes for runtime jvm (build + boot). */
   timeoutMs?: number;
   quiet?: boolean;
   log?: (line: string) => void;
@@ -49,8 +51,11 @@ export async function runScan(opts: ScanOptions): Promise<ScanResult> {
     if (bad.length) throw new ConfigError(`--checks: unknown check "${bad[0]}" (use ${CheckName.options.join(", ")})`);
     cfg.checks = opts.checks as typeof cfg.checks;
   }
+  const jvm = cfg.target.runtime === "jvm";
   const needsRows = cfg.resources.some((r) => r.owner);
-  if (needsRows && !cfg.seed) throw new ConfigError("seed: required when resources have an owner (rows are seeded from them)");
+  if (needsRows && !cfg.seed && !cfg.db) {
+    throw new ConfigError(jvm ? "db: required when resources have an owner (rows are seeded into PostgreSQL)" : "seed: required when resources have an owner (rows are seeded from them)");
+  }
 
   const startedAt = new Date();
   const configText = readFileSync(configPath, "utf8");
@@ -58,13 +63,22 @@ export async function runScan(opts: ScanOptions): Promise<ScanResult> {
   const envCanaries = cfg.checks.includes("secrets") ? makeEnvCanaries(cfg, seedKey) : [];
   let manifest: SeedManifest = { markers: {}, secrets: [], ids: {}, envCanaries };
 
-  const timeoutMs = opts.timeoutMs ?? 300_000;
+  const timeoutMs = opts.timeoutMs ?? (jvm ? 25 * 60_000 : 300_000);
+  const abort = new AbortController();
+  // jvm: what the run could not verify, with the reason (scan-meta.json `unverified`).
+  const unverified: { scope: string; reason: string }[] = [];
+  const runNotes: string[] = [];
+  let pgManifest: PgSeedManifest | undefined;
+  const matrixOpts: MatrixOptions = {};
   let timer: NodeJS.Timeout | undefined;
   const timeout = new Promise<never>((_, rej) => {
-    timer = setTimeout(() => rej(new ScanError(`scan timed out after ${Math.round(timeoutMs / 1000)}s`)), timeoutMs);
+    timer = setTimeout(() => {
+      abort.abort();
+      rej(new ScanError(`scan timed out after ${Math.round(timeoutMs / 1000)}s`));
+    }, timeoutMs);
   });
 
-  let target: Awaited<ReturnType<typeof startTarget>> | undefined;
+  let target: RunningTarget | undefined;
   let aborted = false;
   let ran: { isolation: Isolation; image: string | null } = { isolation: opts.isolation ?? cfg.target.isolation, image: null };
   try {
@@ -78,6 +92,32 @@ export async function runScan(opts: ScanOptions): Promise<ScanResult> {
           opts.patch?.(workdir);
           if (cfg.seed) manifest = { ...seedDatabase(cfg, { workdir, seedKey }), envCanaries };
         },
+        ...(jvm
+          ? {
+              signal: abort.signal,
+              // After the app applied its own migrations: seed through the run's DB, then mint tokens.
+              afterReady: async (t: RunningTarget) => {
+                if (cfg.db) {
+                  if (!t.db) {
+                    matrixOpts.skipAll = "unsupported: the runner provided no database";
+                  } else {
+                    try {
+                      pgManifest = await seedPostgres(cfg, t.db, { seedKey });
+                      manifest = { ...pgManifest, envCanaries };
+                      matrixOpts.db = t.db;
+                    } catch (e) {
+                      if (!(e instanceof SeedError)) throw e;
+                      matrixOpts.skipAll = `unsupported: synthetic data could not be seeded (${e.message})`;
+                    }
+                  }
+                }
+                if (cfg.personas.some((p) => p.auth.type === "jwt")) {
+                  if (!t.issuer) matrixOpts.skipAll ??= "unsupported: the runner provided no test JWT issuer";
+                  else matrixOpts.tokens = mintPersonaTokens(cfg, t.issuer, pgManifest);
+                }
+              },
+            }
+          : {}),
       });
       // Timeout fired while the app was still booting: don't leave it running.
       if (aborted) {
@@ -85,8 +125,33 @@ export async function runScan(opts: ScanOptions): Promise<ScanResult> {
         throw new ScanError("aborted");
       }
       ran = { isolation: target.isolation, image: target.image };
-      const { matrix, raw } = await runMatrixDetailed(cfg, target.baseUrl, manifest);
-      const findings = await runChecks({ cfg, baseUrl: target.baseUrl, matrix, raw, manifest, srcDir: resolve(dirname(configPath), cfg.target.cwd) });
+      if (jvm) {
+        manifest = { ...manifest, credentials: Object.values(matrixOpts.tokens ?? {}) };
+        if (matrixOpts.skipAll) unverified.push({ scope: "run", reason: matrixOpts.skipAll });
+        else {
+          const pre = await authPrecheck(cfg, target.baseUrl, manifest, matrixOpts);
+          runNotes.push(...pre.notes);
+          matrixOpts.skipPersonas = pre.failed;
+          if (pre.skipAll) {
+            matrixOpts.skipAll = pre.skipAll;
+            unverified.push({ scope: "run", reason: pre.skipAll });
+          }
+          for (const [name, why] of Object.entries(pre.failed)) unverified.push({ scope: `personas.${name}`, reason: `정상 대조 실패: ${why}` });
+        }
+      }
+      const { matrix, raw } = await runMatrixDetailed(cfg, target.baseUrl, manifest, matrixOpts);
+      const findings = await runChecks({ cfg, baseUrl: target.baseUrl, matrix, raw, manifest, srcDir: resolve(dirname(configPath), cfg.target.cwd), tokens: matrixOpts.tokens });
+      if (jvm) {
+        for (const r of cfg.resources) {
+          const cells = matrix.cells.filter((c) => c.resource === r.id);
+          if (cells.length && cells.every((c) => c.verdict === "SKIPPED") && !matrixOpts.skipAll) {
+            unverified.push({ scope: `resources.${r.id}`, reason: cells[0]!.evidence.note ?? "all cells skipped" });
+          }
+        }
+        for (const [id, why] of Object.entries(pgManifest?.unobservable ?? {})) {
+          if (!unverified.some((u) => u.scope === `resources.${id}`)) unverified.push({ scope: `resources.${id}`, reason: `marker not observable: ${why}` });
+        }
+      }
       return { matrix, findings };
     })();
     // If the timeout wins, `work` keeps running; swallow its late rejection.
@@ -125,6 +190,14 @@ export async function runScan(opts: ScanOptions): Promise<ScanResult> {
       personas: cfg.personas.map((p) => ({ name: p.name, org: p.org ?? null })),
       resources: cfg.resources.map((r) => ({ id: r.id, route: r.route, public: !!r.public })),
       results: { cells: matrix.cells.length, findings: findings.length, counts },
+      ...(jvm
+        ? {
+            runtime: "jvm" as const,
+            ...(cfg.db ? { db: { kind: "postgres" as const, image: dbImageOf(cfg), migrations: cfg.db.migrations, tables: pgManifest?.tables.length ?? 0 } } : {}),
+            unverified: unverified.map((u) => ({ scope: u.scope, reason: redact(u.reason, manifest) })),
+            notes: [...(target?.notes ?? []), ...(target?.injectedEnv?.length ? [`injected settings: ${target.injectedEnv.join(", ")}`] : []), ...runNotes].map((n) => redact(n, manifest)),
+          }
+        : {}),
       files: {
         matrix: { file: "matrix.json", sha256: hashConfigText(matrixText) },
         findings: { file: "findings.json", sha256: hashConfigText(findingsText) },
@@ -138,6 +211,7 @@ export async function runScan(opts: ScanOptions): Promise<ScanResult> {
     for (const f of findings.filter((x) => x.verdict === "VULNERABLE")) log(`  🔴 [${f.check}] ${f.resourceId} (${f.persona}): ${f.detail}`);
     for (const f of findings.filter((x) => x.verdict === "SKIPPED")) log(`  ⚪ [${f.check}] ${f.resourceId} (${f.persona}): ${f.detail}`);
     if (notRun.length) log(`not implemented yet, not run: ${notRun.join(", ")}`);
+    for (const u of meta.unverified ?? []) log(`  ⚪ 미검증 ${u.scope}: ${u.reason}`);
     log(`wrote ${files.matrix}, ${files.findings}, ${files.meta}`);
 
     return { matrix, findings, counts, notRun, exitCode: cfg.mode === "block" && counts.VULNERABLE > 0 ? 2 : 0, files, meta };
