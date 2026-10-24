@@ -11,7 +11,7 @@ Script: `bash "${CLAUDE_PLUGIN_ROOT}/demo.sh" <command>` (below: `demo.sh`). Wor
 
 ## How to talk
 
-Every step uses **exactly this card**, nothing more (speak the user's language; default Korean):
+Every step uses **exactly this card** (🎯 says why the step exists), nothing more (speak the user's language; default Korean):
 
 ```
 **[n/6] 단계 이름**
@@ -29,25 +29,41 @@ Then move on with `AskUserQuestion`: one question, options `다음 단계` / `�
 
 ## Start
 
-Card-free intro, max 3 lines: "6단계, 약 5분. 내 GitHub 계정에 비공개 레포 1개를 만들고 마지막에 지울 수 있어요." Then ask `시작` / `그만하기`.
+Show this intro verbatim (translate if the user is not Korean), then ask `시작` / `그만하기`:
+
+```
+**Argos란?**
+코드를 읽고 추측하는 대신, 앱을 실제로 띄워 공격해 보는 보안 검사기예요.
+"벤더 A가 벤더 B의 데이터를 볼 수 있나?"를 PR마다 직접 확인하고, 고칠 수 있으면 같은 공격으로 다시 검증한 수정을 PR로 올려줘요.
+
+**튜토리얼 6단계 (약 5분)**
+1. GitHub 로그인 — Argos는 내 GitHub 레포의 Actions에서 돌아요.
+2. 데모 앱 받기 — 공격해 볼 앱과 "누가 무엇을 볼 수 있나" 규칙이 필요해요.
+3. 취약한 PR 올리기 — 실제 개발처럼, 무해해 보이는 변경이 보안 구멍을 만들어요.
+4. Argos 실행 — PR이 올라오면 Argos가 자동으로 앱을 공격해요.
+5. 리포트 받기 — 무엇이 뚫렸고, 무엇을 고쳤는지 PR로 받아요.
+6. 정리 — 실습용 레포를 지워요.
+
+내 GitHub 계정에 비공개 레포 1개가 생기고, 마지막에 지울 수 있어요.
+```
 
 ## Steps
 
 **[1/6] GitHub 로그인** — run `demo.sh check`.
-- 🎯 Argos는 내 GitHub 레포에서 돈다. `gh`로 로그인됐는지 확인.
+- 🎯 Argos가 내 레포에서 돌려면 GitHub 로그인이 필요하다.
 - 💡 필요한 건 `git`과 `gh`뿐. 로컬에 Node·Docker는 필요 없다.
 - Fixes: no gh → `brew install gh`; not logged in → `! gh auth login -h github.com -s workflow`; missing scope → `! gh auth refresh -h github.com -s workflow`. Re-run check after.
 
 **[2/6] 데모 앱 받기** — first one `AskUserQuestion` with three questions: 레포 이름 (`argos-demo` Recommended), 공개 범위 (비공개 Recommended / 공개), 리포트 언어 (한국어 Recommended / English). If check said the name exists, recommend `argos-demo-<MMDD>`. Then `demo.sh create --repo <owner/name> --lang <ko|en> [--public]`.
-- 🎯 벤더마다 자기 데이터만 보는 API를 내 계정에 올린다.
+- 🎯 공격해 볼 앱(벤더마다 자기 데이터만 보는 API)과 그 규칙을 올린다.
 - 💡 `argos.config.yaml` = "누가 무엇을 볼 수 있나" 규칙. Argos는 이 규칙대로 공격한다.
 
 **[3/6] 취약한 PR 올리기** — show the two changed lines of `${CLAUDE_PLUGIN_ROOT}/vulnerable.patch` (just the `-`/`+` lines), then `demo.sh pr --repo <owner/name> --lang <ko|en>`.
-- 🎯 정리처럼 보이는 PR이 실은 보안 구멍 두 개를 연다.
+- 🎯 실제 개발처럼, 정리처럼 보이는 PR이 보안 구멍 두 개를 연다.
 - 💡 ① vendor 조건 삭제 → 남의 데이터 조회 ② `SELECT *` → API 키 노출. 코드 리뷰로는 놓치기 쉽다.
 
 **[4/6] Argos 실행 지켜보기** — `demo.sh watch --repo <owner/name>` with `run_in_background: true`. Show the card right away with the Actions URL, then wait for the completion notification (do not poll). On failure: `gh run view <id> --repo <owner/name> --log-failed | tail -30`.
-- 🎯 Actions에서 Argos가 앱을 띄워 실제로 공격한다 (1~3분).
+- 🎯 PR이 올라오자 Argos가 자동으로 앱을 띄워 공격한다 (1~3분).
 - 💡 앱은 네트워크·쓰기 토큰 없는 Docker 안에서 돈다. PR을 쓰는 단계는 따로 분리돼 있다.
 
 **[5/6] 리포트 받기** — `demo.sh report --repo <owner/name> --save ./argos-demo-report.md`, then `gh pr diff <report PR url>`.
@@ -57,7 +73,7 @@ Card-free intro, max 3 lines: "6단계, 약 5분. 내 GitHub 계정에 비공개
 - Extra option: `브라우저로 열기` → `gh pr view <url> --web`.
 
 **[6/6] 정리** — options `레포 삭제` / `남겨두기`. Delete: `demo.sh cleanup --repo <owner/name>`; if `delete_repo` scope is missing → `! gh auth refresh -h github.com -s delete_repo`, then retry.
-- 🎯 실습 레포를 지운다.
+- 🎯 실습용 레포를 지운다.
 - 💡 내 레포에 쓰려면 `.github/workflows/argos.yml`과 `argos.config.yaml`을 복사하면 된다.
 
 ## End
