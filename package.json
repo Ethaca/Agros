@@ -10,6 +10,7 @@
   "scripts": {
     "argos": "tsx src/cli.ts",
     "demo:spring": "bash demo/spring-demo.sh",
+    "demo:github": "bash plugins/argos/demo.sh",
     "sandbox:build": "docker build -f sandbox/Dockerfile -t argos-local-runtime:dev .",
     "sandbox:worker": "tsx src/sandbox/worker.ts",
     "typecheck": "tsc --noEmit",

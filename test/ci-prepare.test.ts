@@ -233,3 +233,14 @@ test("prepare refuses to wipe a non-artifact directory", async () => {
   await assert.rejects(runPrepare({ dir: lab.work, artifactDir: d, env: env(), ...quiet }, { runInit: fakeSpringInit(), runFix: fakeFix() }), /not an Argos artifact/);
   assert.ok(existsSync(join(d, "keep.txt")));
 });
+
+test("CLI: options after `ci prepare` reach prepare, not the parent `ci` (they share --lang/--base/--timeout/--isolation)", () => {
+  // Before positional options, commander gave --lang to `ci`, so prepare ran in English and this did not fail.
+  let stderr = "";
+  try {
+    execFileSync("node", ["--import", "tsx", "src/cli.ts", "ci", "prepare", "--dir", ".", "--artifact", art(), "--lang", "xx"], { encoding: "utf8", stdio: "pipe", env: env() });
+  } catch (e) {
+    stderr = String((e as { stderr?: string }).stderr);
+  }
+  assert.match(stderr, /--lang: expected "en" or "ko", got "xx"/);
+});

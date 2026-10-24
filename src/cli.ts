@@ -34,6 +34,9 @@ const isUserError = (e: unknown): boolean =>
 
 const program = new Command();
 program.name("argos").description("Prove, vouch, and plug access-control checks");
+// `ci` and its subcommands share option names (--lang, --base, --timeout, --isolation). Without positional
+// options commander hands those to `ci`, so `argos ci prepare --lang ko` would silently ignore --lang.
+program.enablePositionalOptions();
 
 program
   .command("init [dir]")
@@ -169,6 +172,7 @@ program
 
 const ci = program
   .command("ci")
+  .enablePositionalOptions()
   .description("Everything for CI: all checks, verified fixes, optional fix PR, evidence report")
   .option("--config <path>", "config file", "argos.config.yaml")
   .option("--out <dir>", "output directory", "out")

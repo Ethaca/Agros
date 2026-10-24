@@ -1,0 +1,65 @@
+# Argos rules for this demo, confirmed by a person: who may read what.
+# Argos attacks every route with every persona and compares what happened with `expect`.
+# Test tokens only: never put production credentials in this file.
+version: 1
+target:
+  start: "node --no-warnings app.mjs"
+  cwd: "."
+  baseUrl: "http://127.0.0.1:0"
+  readyPath: "/health"
+  env: {}
+  isolation: container
+seed:
+  schema: "schema.sql"
+  dbPath: "./data.db"
+personas:
+  - name: vendor1
+    org: v1
+    auth: { type: bearer, token: "tok-v1" }
+  - name: vendor2
+    org: v2
+    auth: { type: bearer, token: "tok-v2" }
+  - name: vendor3
+    org: v3
+    auth: { type: bearer, token: "tok-v3" }
+  - name: anonymous
+    auth: { type: none }
+resources:
+  # A vendor reads only its own datasets.
+  - id: dataset-read
+    route: "GET /api/datasets/:id"
+    owner: { table: datasets, column: vendor_id }
+    expect: { owner: allow, other: deny, anonymous: deny }
+  - id: dataset-search
+    route: "GET /api/datasets?search="
+    owner: { table: datasets, column: vendor_id }
+    expect: { owner: allow, other: deny, anonymous: deny }
+  - id: dataset-tasks
+    route: "GET /api/datasets/:id/tasks"
+    owner: { table: datasets, column: vendor_id }
+    expect: { owner: allow, other: deny, anonymous: deny }
+  - id: task-read
+    route: "GET /api/tasks/:id"
+    owner: { table: tasks, column: vendor_id }
+    expect: { owner: allow, other: deny, anonymous: deny }
+  # Vendor directory: other vendors may see the profile, but never the API key (secrets check).
+  - id: vendor-profile
+    route: "GET /api/vendors/:id"
+    owner: { table: vendors, column: id }
+    expect: { owner: allow, other: allow, anonymous: deny }
+  - id: health
+    route: "GET /health"
+    public: true
+  - id: products
+    route: "GET /api/products"
+    public: true
+checks: [bola, unauth, sqli, secrets]
+secrets:
+  sensitiveColumns: ["api_key", "token", "secret", "password"]
+  allowOwnerSecretRead: false
+  envCanaries: ["JWT_SECRET", "SECRET_KEY", "API_KEY", "STRIPE_SECRET_KEY"]
+fix:
+  principal: req.user.vendor_id   # the caller's vendor inside a handler (used for verified fixes)
+report:
+  lang: en
+mode: report
