@@ -33,6 +33,7 @@ export function Landing(props: BaseProps) {
         </a>
         <h1 className="mt-6 max-w-3xl text-4xl font-semibold tracking-tight text-balance text-gray-900 sm:text-5xl">바이브코더부터 엔터프라이즈 레벨까지, 보안은 Argos에게</h1>
         <p className="mt-5 max-w-2xl text-lg leading-8 text-gray-600">PR의 보안 영향을 코드 근거와 함께 따라가 보세요. 무엇이 달라지고, 어떤 접근이 가능해지고, 어떻게 안전하게 구현할지 이해하며 배웁니다.</p>
+        <p className="mt-4 text-base font-semibold text-gray-900">금융권 개발자 3명이 만든 원클릭 보안 앱</p>
         <div className="mt-8 flex flex-wrap items-center gap-3">
           <Btn href="/auth/github" variant="primary" size="lg">GitHub 로 시작하기</Btn>
         </div>
