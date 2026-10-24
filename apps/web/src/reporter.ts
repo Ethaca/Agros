@@ -1,6 +1,6 @@
 import { config } from './config.ts';
 import type { ParsedPatch } from './diff.ts';
-import { CATEGORY_NAMES, severityRank, type AnalysisResult, type Finding, type Severity } from './types.ts';
+import { CATEGORY_NAMES, SEVERITY_ORDER, severityRank, type AnalysisResult, type Finding, type Severity } from './types.ts';
 import { ANALYSIS_NOTICE, IMPACT_LABELS } from './impact.ts';
 import { isLang, type Lang } from './i18n.ts';
 import { learningGuide, learningSource, reviewPrompt } from './learning.ts';
@@ -32,7 +32,9 @@ const S = {
       `Highest risk **${risk}** · ${n} finding${n === 1 ? '' : 's'} · ${fail ? '❌ Blocking merge recommended' : '⚠️ Review recommended'}`,
     clean: 'No API security issues were found in the scanned scope. This does not guarantee the safety of the whole service.',
     intent: 'Purpose of the change:',
-    table: '| | Severity | Category | Location | Finding |',
+    sevLabel: { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low', info: 'Info' } as Record<Severity, string>,
+    howToRead: 'Each finding shows **what changed → what it exposes → how to fix it**, with code evidence where available. Start from the top — findings are ordered by severity.',
+    table: '| Severity | Category | Location | What was found |',
     details: 'Details',
     moreOnDashboard: 'See the dashboard for the remaining details.',
     learnSection: '### 🌱 What to learn from this change',
@@ -66,7 +68,9 @@ const S = {
       `최고 위험도 **${risk}** · 발견 ${n}건 · ${fail ? '❌ 머지 차단 권장' : '⚠️ 검토 권장'}`,
     clean: '검사 범위에서 API 보안 이슈가 발견되지 않았습니다. 전체 서비스의 안전을 보증하지는 않습니다.',
     intent: '변경 목적:',
-    table: '| | 심각도 | 분류 | 위치 | 내용 |',
+    sevLabel: { critical: '심각', high: '높음', medium: '보통', low: '낮음', info: '정보' } as Record<Severity, string>,
+    howToRead: '각 항목은 **무엇이 바뀌고 → 무엇이 열리고 → 어떻게 고치는지**를 코드 근거와 함께 보여줍니다. 위에서부터 보세요 — 심각도 순으로 정렬돼 있습니다.',
+    table: '| 심각도 | 분류 | 위치 | 발견 내용 |',
     details: '상세 내용',
     moreOnDashboard: '추가 상세 결과는 대시보드에서 확인해 주세요.',
     learnSection: '### 🌱 이번 변경에서 배울 점',
@@ -142,18 +146,25 @@ function learningMarkdown(f: Finding, lang: Lang): string {
 export function renderSummaryMarkdown(result: AnalysisResult, opts: { detailUrl?: string; sha?: string } = {}): string {
   const lang = langOf(result);
   const s = S[lang];
+  const findings = [...result.findings].sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
   const out: string[] = [REPORT_MARKER, `## ${ICON[result.risk]} ${s.title}`];
-  out.push(result.findings.length ? s.headline(result.risk.toUpperCase(), result.findings.length, shouldFail(result)) : s.clean);
+  out.push(findings.length ? s.headline(result.risk.toUpperCase(), findings.length, shouldFail(result)) : s.clean);
+  if (findings.length) {
+    const counts = new Map<Severity, number>();
+    for (const f of findings) counts.set(f.severity, (counts.get(f.severity) ?? 0) + 1);
+    const breakdown = SEVERITY_ORDER.filter((sv) => counts.get(sv)).map((sv) => `${ICON[sv]} ${s.sevLabel[sv]} ${counts.get(sv)}`).join('  ·  ');
+    out.push('', breakdown);
+  }
   if (result.intent) out.push('', `**${s.intent}** ${oneLine(result.intent)}`);
   if (result.summary) out.push('', `> ${result.summary.replace(/\n/g, '\n> ')}`);
 
-  if (result.findings.length) {
-    out.push('', s.table, '|---|---|---|---|---|');
-    for (const f of result.findings) {
-      out.push(`| ${ICON[f.severity]} | ${f.severity} | ${f.category} | \`${oneLine(loc(f))}\` | ${oneLine(f.title)} |`);
+  if (findings.length) {
+    out.push('', s.howToRead, '', s.table, '|---|---|---|---|');
+    for (const f of findings) {
+      out.push(`| ${ICON[f.severity]} ${s.sevLabel[f.severity]} | \`${f.category}\` | \`${oneLine(loc(f))}\` | ${oneLine(f.title)} |`);
     }
     out.push('', `<details><summary>${s.details}</summary>`, '');
-    for (const f of result.findings) {
+    for (const f of findings) {
       if (out.join('\n').length > 45_000) {
         out.push('', s.moreOnDashboard);
         break;
@@ -165,7 +176,7 @@ export function renderSummaryMarkdown(result: AnalysisResult, opts: { detailUrl?
     out.push('</details>');
     out.push('', s.learnSection, '');
     const learned = new Set<string>();
-    for (const finding of result.findings) {
+    for (const finding of findings) {
       if (learned.has(finding.category)) continue;
       learned.add(finding.category);
       out.push(learningMarkdown(finding, lang));
@@ -194,7 +205,8 @@ export interface ReviewComment { path: string; line: number; side: 'RIGHT'; body
 /** diff 범위 안에 있는 라인에만 인라인 코멘트를 단다 (범위 밖이면 GitHub 이 422 를 반환) */
 export function buildReviewComments(result: AnalysisResult, patches: Map<string, ParsedPatch>, max = 30): ReviewComment[] {
   const lang = langOf(result);
-  return result.findings
+  return [...result.findings]
+    .sort((a, b) => severityRank(b.severity) - severityRank(a.severity))
     .filter((f) => f.line && patches.get(f.file)?.commentable.has(f.line))
     .slice(0, max)
     .map((f) => ({ path: f.file, line: f.line!, side: 'RIGHT' as const, body: renderFindingBody(f, true, lang) }));
