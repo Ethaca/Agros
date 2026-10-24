@@ -29,7 +29,7 @@ Claude Code에서:
 /argos:demo
 ```
 
-또는 "Argos 데모 해줘"라고 말한다. Claude가 단계마다 확인을 받고 명령을 대신 실행한다. GitHub 로그인이 필요하면 `! gh auth login -h github.com -s workflow`를 입력하라고 안내한다.
+또는 "Argos 데모 해줘"라고 말한다. 6단계 튜토리얼로, 단계마다 목표·결과·핵심 한 줄만 보여 주고 확인을 받은 뒤 명령을 대신 실행한다. GitHub 로그인이 필요하면 `! gh auth login -h github.com -s workflow`를 입력하라고 안내한다.
 
 | 단계 | 하는 일 |
 |---|---|
