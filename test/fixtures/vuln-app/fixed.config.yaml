@@ -21,12 +21,23 @@ resources:
     route: "GET /api/datasets/:id"
     owner: { table: datasets, column: vendor_id }
     expect: { owner: allow, other: deny, anonymous: deny }
+  - id: vendor-read
+    route: "GET /api/vendors/:id"
+    owner: { table: vendors, column: id }
+    expect: { owner: allow, other: deny, anonymous: deny }
+  - id: dataset-search
+    route: "GET /api/datasets"
+    params: [search]
+    expect: { owner: allow, other: deny, anonymous: deny }
   - id: export
     route: "POST /api/export"
     safe: true
     expect: { owner: allow, other: deny, anonymous: deny }
+  - id: debug-env
+    route: "GET /debug/env"
+    expect: { owner: deny, other: deny, anonymous: deny }
   - id: health
     route: "GET /health"
     public: true
-checks: [bola, unauth]
+checks: [bola, unauth, sqli, secrets]
 mode: block

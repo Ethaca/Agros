@@ -13,12 +13,31 @@ export interface SecretMarker {
   marker: string;
 }
 
+export interface EnvCanary {
+  name: string;
+  /** Unique value injected into the app's environment; showing up in a response means the env leaked. */
+  marker: string;
+}
+
 export interface SeedManifest {
   /** resourceId -> org -> owner-data marker (full value; mask before printing). */
   markers: Record<string, Record<string, string>>;
   secrets: SecretMarker[];
   /** resourceId -> org -> id of the seeded row (primary key), for filling `:id` in routes. */
   ids: Record<string, Record<string, string | number>>;
+  /** Injected environment canaries (secrets check b). */
+  envCanaries?: EnvCanary[];
+}
+
+/** All owner-data markers seeded for `org`, across tables: any of them in a response means that org's data. */
+export function orgMarkers(m: SeedManifest, org: string): string[] {
+  return [...new Set(Object.values(m.markers).map((byOrg) => byOrg[org]).filter((x): x is string => !!x))];
+}
+
+export const envCanaryMarker = (seedKey: string, name: string): string => `ARGOS_ENV_${name}_${hex6(seedKey, "env", name)}`;
+
+export function makeEnvCanaries(cfg: Config, seedKey: string): EnvCanary[] {
+  return cfg.secrets.envCanaries.map((name) => ({ name, marker: envCanaryMarker(seedKey, name) }));
 }
 
 export class SeedError extends Error {}
@@ -43,7 +62,11 @@ export const secretMarker = (seedKey: string, n: number, table: string, column: 
   `ARGOS_SECRET_${n}_${hex6(seedKey, "secret", table, column, org)}`;
 
 export function allMarkers(m: SeedManifest): string[] {
-  return [...Object.values(m.markers).flatMap((o) => Object.values(o)), ...m.secrets.map((s) => s.marker)];
+  return [
+    ...Object.values(m.markers).flatMap((o) => Object.values(o)),
+    ...m.secrets.map((s) => s.marker),
+    ...(m.envCanaries ?? []).map((c) => c.marker),
+  ];
 }
 
 /** Replace any full marker in `text` with its masked form, so evidence never carries a full value. */
@@ -120,9 +143,30 @@ export function seedDatabase(cfg: Config, opts: SeedOptions): SeedManifest {
       else byTable.set(r.owner.table, { column: r.owner.column, resourceIds: [r.id] });
     }
 
+    // Seed referenced tables first so `<x>_id` columns can point at the same org's row in table x.
+    const refOf = (col: string): string | undefined => {
+      const base = /^(.+)_id$/.exec(col)?.[1];
+      return base ? [base, `${base}s`, `${base}es`].find((t) => byTable.has(t)) : undefined;
+    };
+    const colsOf = new Map<string, ColumnInfo[]>();
+    for (const t of byTable.keys()) colsOf.set(t, db.prepare(`PRAGMA table_info(${q(t)})`).all() as unknown as ColumnInfo[]);
+    const order: string[] = [];
+    const pending = [...byTable.keys()];
+    while (pending.length) {
+      const i = pending.findIndex((t) =>
+        (colsOf.get(t) ?? []).every((c) => {
+          const r = refOf(c.name);
+          return !r || r === t || order.includes(r) || c.name === byTable.get(t)!.column;
+        }),
+      );
+      order.push(...pending.splice(i < 0 ? 0 : i, 1));
+    }
+    const rowIdOf = new Map<string, Map<string, string | number>>();
+
     let n = 0;
-    for (const [table, { column: ownerCol, resourceIds }] of byTable) {
-      const cols = db.prepare(`PRAGMA table_info(${q(table)})`).all() as unknown as ColumnInfo[];
+    for (const table of order) {
+      const { column: ownerCol, resourceIds } = byTable.get(table)!;
+      const cols = colsOf.get(table) ?? [];
       if (!cols.length) throw new SeedError(`table "${table}" not found in ${seed.schema}`);
       if (!cols.some((c) => c.name === ownerCol)) {
         throw new SeedError(`owner column "${table}.${ownerCol}" not found in ${seed.schema}`);
@@ -142,7 +186,10 @@ export function seedDatabase(cfg: Config, opts: SeedOptions): SeedManifest {
             const marker = secretMarker(opts.seedKey, ++n, table, c.name, org);
             manifest.secrets.push({ table, column: c.name, org, marker });
             values.push(marker);
-          } else if (/INT|REAL|FLOA|DOUB|NUM|DEC|BOOL/i.test(c.type)) values.push(1);
+          } else if (/INT|REAL|FLOA|DOUB|NUM|DEC|BOOL/i.test(c.type)) {
+            const ref = refOf(c.name);
+            values.push((ref && ref !== table ? rowIdOf.get(ref)?.get(org) : undefined) ?? 1);
+          }
           else values.push(ownerMarker(opts.seedKey, resourceIds[0]!, org));
         }
         const res = db
@@ -153,6 +200,7 @@ export function seedDatabase(cfg: Config, opts: SeedOptions): SeedManifest {
         const pk = cols.find((c) => c.pk === 1);
         const pkIdx = pk ? insertCols.findIndex((c) => c.name === pk.name) : -1;
         const rowId = pkIdx >= 0 ? values[pkIdx]! : Number(res.lastInsertRowid);
+        (rowIdOf.get(table) ?? rowIdOf.set(table, new Map()).get(table)!).set(org, rowId);
         for (const id of resourceIds) {
           (manifest.markers[id] ??= {})[org] = ownerMarker(opts.seedKey, resourceIds[0]!, org);
           (manifest.ids[id] ??= {})[org] = rowId;

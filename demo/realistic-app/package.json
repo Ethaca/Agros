@@ -1,9 +1,9 @@
 {
-  "name": "demo-clean",
+  "name": "demo-realistic-app",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Argos demo target with the same routes and the flaws fixed (false-positive baseline).",
+  "description": "Argos realistic multi-tenant demo target with access controls enabled.",
   "scripts": {
     "start": "node --no-warnings app.mjs",
     "seed": "node --no-warnings seed.mjs"

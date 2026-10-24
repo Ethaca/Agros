@@ -1,0 +1,808 @@
+[
+  {
+    "check": "bola",
+    "resourceId": "dataset-read",
+    "persona": "vendor1",
+    "verdict": "VULNERABLE",
+    "proof": {
+      "request": "GET /api/datasets/2",
+      "status": 200,
+      "marker": "ARGOS_",
+      "note": "{\"id\":2,\"vendor_id\":\"v2\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}"
+    },
+    "detail": "vendor1 read v2's data. GET /api/datasets/2 (data of v2): expected deny, observed allow [200]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "dataset-read",
+    "persona": "vendor1",
+    "verdict": "VULNERABLE",
+    "proof": {
+      "request": "GET /api/datasets/3",
+      "status": 200,
+      "marker": "ARGOS_",
+      "note": "{\"id\":3,\"vendor_id\":\"v3\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}"
+    },
+    "detail": "vendor1 read v3's data. GET /api/datasets/3 (data of v3): expected deny, observed allow [200]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "dataset-search",
+    "persona": "vendor1",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/datasets",
+      "status": 200,
+      "note": "[{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}]"
+    },
+    "detail": "GET /api/datasets (data of v2): expected deny, observed deny [200]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "dataset-search",
+    "persona": "vendor1",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/datasets",
+      "status": 200,
+      "note": "[{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}]"
+    },
+    "detail": "GET /api/datasets (data of v3): expected deny, observed deny [200]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "dataset-tasks",
+    "persona": "vendor1",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/datasets/2/tasks",
+      "status": 404,
+      "note": "{\"error\":\"not found\"}"
+    },
+    "detail": "GET /api/datasets/2/tasks (data of v2): expected deny, observed deny [404]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "dataset-tasks",
+    "persona": "vendor1",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/datasets/3/tasks",
+      "status": 404,
+      "note": "{\"error\":\"not found\"}"
+    },
+    "detail": "GET /api/datasets/3/tasks (data of v3): expected deny, observed deny [404]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "task-read",
+    "persona": "vendor1",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/tasks/2",
+      "status": 404,
+      "note": "{\"error\":\"not found\"}"
+    },
+    "detail": "GET /api/tasks/2 (data of v2): expected deny, observed deny [404]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "task-read",
+    "persona": "vendor1",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/tasks/3",
+      "status": 404,
+      "note": "{\"error\":\"not found\"}"
+    },
+    "detail": "GET /api/tasks/3 (data of v3): expected deny, observed deny [404]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "vendor-profile",
+    "persona": "vendor1",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/vendors/v2",
+      "status": 200,
+      "marker": "ARGOS_",
+      "note": "{\"id\":\"v2\",\"name\":\"ARGOS_…\",\"contact_email\":\"ARGOS_…\",\"api_key\":\"ARGOS_…\"}"
+    },
+    "detail": "GET /api/vendors/v2 (data of v2): expected allow, observed allow [200]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "vendor-profile",
+    "persona": "vendor1",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/vendors/v3",
+      "status": 200,
+      "marker": "ARGOS_",
+      "note": "{\"id\":\"v3\",\"name\":\"ARGOS_…\",\"contact_email\":\"ARGOS_…\",\"api_key\":\"ARGOS_…\"}"
+    },
+    "detail": "GET /api/vendors/v3 (data of v3): expected allow, observed allow [200]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "export",
+    "persona": "vendor1",
+    "verdict": "VULNERABLE",
+    "proof": {
+      "request": "POST /api/export",
+      "status": 200,
+      "marker": "ARGOS_",
+      "note": "{\"datasets\":[{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\",\"tasks\":[{\"id\":1,\"dataset_id\":1,\"vendor"
+    },
+    "detail": "vendor1 read v2's data. POST /api/export (data of v2): expected deny, observed allow [200]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "export",
+    "persona": "vendor1",
+    "verdict": "VULNERABLE",
+    "proof": {
+      "request": "POST /api/export",
+      "status": 200,
+      "marker": "ARGOS_",
+      "note": "{\"datasets\":[{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\",\"tasks\":[{\"id\":1,\"dataset_id\":1,\"vendor"
+    },
+    "detail": "vendor1 read v3's data. POST /api/export (data of v3): expected deny, observed allow [200]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "dataset-read",
+    "persona": "vendor2",
+    "verdict": "VULNERABLE",
+    "proof": {
+      "request": "GET /api/datasets/1",
+      "status": 200,
+      "marker": "ARGOS_",
+      "note": "{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}"
+    },
+    "detail": "vendor2 read v1's data. GET /api/datasets/1 (data of v1): expected deny, observed allow [200]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "dataset-read",
+    "persona": "vendor2",
+    "verdict": "VULNERABLE",
+    "proof": {
+      "request": "GET /api/datasets/3",
+      "status": 200,
+      "marker": "ARGOS_",
+      "note": "{\"id\":3,\"vendor_id\":\"v3\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}"
+    },
+    "detail": "vendor2 read v3's data. GET /api/datasets/3 (data of v3): expected deny, observed allow [200]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "dataset-search",
+    "persona": "vendor2",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/datasets",
+      "status": 200,
+      "note": "[{\"id\":2,\"vendor_id\":\"v2\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}]"
+    },
+    "detail": "GET /api/datasets (data of v1): expected deny, observed deny [200]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "dataset-search",
+    "persona": "vendor2",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/datasets",
+      "status": 200,
+      "note": "[{\"id\":2,\"vendor_id\":\"v2\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}]"
+    },
+    "detail": "GET /api/datasets (data of v3): expected deny, observed deny [200]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "dataset-tasks",
+    "persona": "vendor2",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/datasets/1/tasks",
+      "status": 404,
+      "note": "{\"error\":\"not found\"}"
+    },
+    "detail": "GET /api/datasets/1/tasks (data of v1): expected deny, observed deny [404]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "dataset-tasks",
+    "persona": "vendor2",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/datasets/3/tasks",
+      "status": 404,
+      "note": "{\"error\":\"not found\"}"
+    },
+    "detail": "GET /api/datasets/3/tasks (data of v3): expected deny, observed deny [404]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "task-read",
+    "persona": "vendor2",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/tasks/1",
+      "status": 404,
+      "note": "{\"error\":\"not found\"}"
+    },
+    "detail": "GET /api/tasks/1 (data of v1): expected deny, observed deny [404]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "task-read",
+    "persona": "vendor2",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/tasks/3",
+      "status": 404,
+      "note": "{\"error\":\"not found\"}"
+    },
+    "detail": "GET /api/tasks/3 (data of v3): expected deny, observed deny [404]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "vendor-profile",
+    "persona": "vendor2",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/vendors/v1",
+      "status": 200,
+      "marker": "ARGOS_",
+      "note": "{\"id\":\"v1\",\"name\":\"ARGOS_…\",\"contact_email\":\"ARGOS_…\",\"api_key\":\"ARGOS_…\"}"
+    },
+    "detail": "GET /api/vendors/v1 (data of v1): expected allow, observed allow [200]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "vendor-profile",
+    "persona": "vendor2",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/vendors/v3",
+      "status": 200,
+      "marker": "ARGOS_",
+      "note": "{\"id\":\"v3\",\"name\":\"ARGOS_…\",\"contact_email\":\"ARGOS_…\",\"api_key\":\"ARGOS_…\"}"
+    },
+    "detail": "GET /api/vendors/v3 (data of v3): expected allow, observed allow [200]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "export",
+    "persona": "vendor2",
+    "verdict": "VULNERABLE",
+    "proof": {
+      "request": "POST /api/export",
+      "status": 200,
+      "marker": "ARGOS_",
+      "note": "{\"datasets\":[{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\",\"tasks\":[{\"id\":1,\"dataset_id\":1,\"vendor"
+    },
+    "detail": "vendor2 read v1's data. POST /api/export (data of v1): expected deny, observed allow [200]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "export",
+    "persona": "vendor2",
+    "verdict": "VULNERABLE",
+    "proof": {
+      "request": "POST /api/export",
+      "status": 200,
+      "marker": "ARGOS_",
+      "note": "{\"datasets\":[{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\",\"tasks\":[{\"id\":1,\"dataset_id\":1,\"vendor"
+    },
+    "detail": "vendor2 read v3's data. POST /api/export (data of v3): expected deny, observed allow [200]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "dataset-read",
+    "persona": "vendor3",
+    "verdict": "VULNERABLE",
+    "proof": {
+      "request": "GET /api/datasets/1",
+      "status": 200,
+      "marker": "ARGOS_",
+      "note": "{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}"
+    },
+    "detail": "vendor3 read v1's data. GET /api/datasets/1 (data of v1): expected deny, observed allow [200]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "dataset-read",
+    "persona": "vendor3",
+    "verdict": "VULNERABLE",
+    "proof": {
+      "request": "GET /api/datasets/2",
+      "status": 200,
+      "marker": "ARGOS_",
+      "note": "{\"id\":2,\"vendor_id\":\"v2\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}"
+    },
+    "detail": "vendor3 read v2's data. GET /api/datasets/2 (data of v2): expected deny, observed allow [200]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "dataset-search",
+    "persona": "vendor3",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/datasets",
+      "status": 200,
+      "note": "[{\"id\":3,\"vendor_id\":\"v3\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}]"
+    },
+    "detail": "GET /api/datasets (data of v1): expected deny, observed deny [200]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "dataset-search",
+    "persona": "vendor3",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/datasets",
+      "status": 200,
+      "note": "[{\"id\":3,\"vendor_id\":\"v3\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\"}]"
+    },
+    "detail": "GET /api/datasets (data of v2): expected deny, observed deny [200]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "dataset-tasks",
+    "persona": "vendor3",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/datasets/1/tasks",
+      "status": 404,
+      "note": "{\"error\":\"not found\"}"
+    },
+    "detail": "GET /api/datasets/1/tasks (data of v1): expected deny, observed deny [404]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "dataset-tasks",
+    "persona": "vendor3",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/datasets/2/tasks",
+      "status": 404,
+      "note": "{\"error\":\"not found\"}"
+    },
+    "detail": "GET /api/datasets/2/tasks (data of v2): expected deny, observed deny [404]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "task-read",
+    "persona": "vendor3",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/tasks/1",
+      "status": 404,
+      "note": "{\"error\":\"not found\"}"
+    },
+    "detail": "GET /api/tasks/1 (data of v1): expected deny, observed deny [404]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "task-read",
+    "persona": "vendor3",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/tasks/2",
+      "status": 404,
+      "note": "{\"error\":\"not found\"}"
+    },
+    "detail": "GET /api/tasks/2 (data of v2): expected deny, observed deny [404]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "vendor-profile",
+    "persona": "vendor3",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/vendors/v1",
+      "status": 200,
+      "marker": "ARGOS_",
+      "note": "{\"id\":\"v1\",\"name\":\"ARGOS_…\",\"contact_email\":\"ARGOS_…\",\"api_key\":\"ARGOS_…\"}"
+    },
+    "detail": "GET /api/vendors/v1 (data of v1): expected allow, observed allow [200]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "vendor-profile",
+    "persona": "vendor3",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/vendors/v2",
+      "status": 200,
+      "marker": "ARGOS_",
+      "note": "{\"id\":\"v2\",\"name\":\"ARGOS_…\",\"contact_email\":\"ARGOS_…\",\"api_key\":\"ARGOS_…\"}"
+    },
+    "detail": "GET /api/vendors/v2 (data of v2): expected allow, observed allow [200]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "export",
+    "persona": "vendor3",
+    "verdict": "VULNERABLE",
+    "proof": {
+      "request": "POST /api/export",
+      "status": 200,
+      "marker": "ARGOS_",
+      "note": "{\"datasets\":[{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\",\"tasks\":[{\"id\":1,\"dataset_id\":1,\"vendor"
+    },
+    "detail": "vendor3 read v1's data. POST /api/export (data of v1): expected deny, observed allow [200]"
+  },
+  {
+    "check": "bola",
+    "resourceId": "export",
+    "persona": "vendor3",
+    "verdict": "VULNERABLE",
+    "proof": {
+      "request": "POST /api/export",
+      "status": 200,
+      "marker": "ARGOS_",
+      "note": "{\"datasets\":[{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\",\"tasks\":[{\"id\":1,\"dataset_id\":1,\"vendor"
+    },
+    "detail": "vendor3 read v2's data. POST /api/export (data of v2): expected deny, observed allow [200]"
+  },
+  {
+    "check": "unauth",
+    "resourceId": "dataset-read",
+    "persona": "anonymous",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/datasets/1",
+      "status": 401,
+      "note": "{\"error\":\"unauthorized\"}"
+    },
+    "detail": "GET /api/datasets/1 (data of v1): expected deny, observed deny [401]"
+  },
+  {
+    "check": "unauth",
+    "resourceId": "dataset-search",
+    "persona": "anonymous",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/datasets",
+      "status": 401,
+      "note": "{\"error\":\"unauthorized\"}"
+    },
+    "detail": "GET /api/datasets (data of v1): expected deny, observed deny [401]"
+  },
+  {
+    "check": "unauth",
+    "resourceId": "dataset-tasks",
+    "persona": "anonymous",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/datasets/1/tasks",
+      "status": 401,
+      "note": "{\"error\":\"unauthorized\"}"
+    },
+    "detail": "GET /api/datasets/1/tasks (data of v1): expected deny, observed deny [401]"
+  },
+  {
+    "check": "unauth",
+    "resourceId": "task-read",
+    "persona": "anonymous",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/tasks/1",
+      "status": 401,
+      "note": "{\"error\":\"unauthorized\"}"
+    },
+    "detail": "GET /api/tasks/1 (data of v1): expected deny, observed deny [401]"
+  },
+  {
+    "check": "unauth",
+    "resourceId": "vendor-profile",
+    "persona": "anonymous",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/vendors/v1",
+      "status": 401,
+      "note": "{\"error\":\"unauthorized\"}"
+    },
+    "detail": "GET /api/vendors/v1 (data of v1): expected deny, observed deny [401]"
+  },
+  {
+    "check": "unauth",
+    "resourceId": "export",
+    "persona": "anonymous",
+    "verdict": "VULNERABLE",
+    "proof": {
+      "request": "POST /api/export",
+      "status": 200,
+      "marker": "ARGOS_",
+      "note": "{\"datasets\":[{\"id\":1,\"vendor_id\":\"v1\",\"name\":\"ARGOS_…\",\"description\":\"ARGOS_…\",\"tasks\":[{\"id\":1,\"dataset_id\":1,\"vendor"
+    },
+    "detail": "anonymous request succeeded. POST /api/export (data of v1): expected deny, observed allow [200]"
+  },
+  {
+    "check": "unauth",
+    "resourceId": "debug-env",
+    "persona": "anonymous",
+    "verdict": "VULNERABLE",
+    "proof": {
+      "request": "GET /debug/env",
+      "status": 200,
+      "note": "body withheld: response contains the process environment"
+    },
+    "detail": "anonymous request succeeded. GET /debug/env: expected deny, observed allow [200]"
+  },
+  {
+    "check": "sqli",
+    "resourceId": "dataset-search",
+    "persona": "vendor1",
+    "verdict": "VULNERABLE",
+    "proof": {
+      "request": "GET /api/datasets?search=%27",
+      "status": 500,
+      "note": "control 200 / ' 500 / '' 200"
+    },
+    "detail": "\"search\" is concatenated into SQL: ' -> 500, '' -> 200"
+  },
+  {
+    "check": "secrets",
+    "resourceId": "vendor-profile",
+    "persona": "vendor1",
+    "verdict": "SUSPECTED",
+    "proof": {
+      "request": "GET /api/vendors/v1",
+      "status": 200,
+      "marker": "ARGOS_"
+    },
+    "detail": "owner re-exposed own secret in vendors.api_key",
+    "column": "vendors.api_key"
+  },
+  {
+    "check": "secrets",
+    "resourceId": "vendor-profile",
+    "persona": "vendor1",
+    "verdict": "VULNERABLE",
+    "proof": {
+      "request": "GET /api/vendors/v2",
+      "status": 200,
+      "marker": "ARGOS_"
+    },
+    "detail": "vendor1 received v2's secret from vendors.api_key",
+    "column": "vendors.api_key"
+  },
+  {
+    "check": "secrets",
+    "resourceId": "vendor-profile",
+    "persona": "vendor1",
+    "verdict": "VULNERABLE",
+    "proof": {
+      "request": "GET /api/vendors/v3",
+      "status": 200,
+      "marker": "ARGOS_"
+    },
+    "detail": "vendor1 received v3's secret from vendors.api_key",
+    "column": "vendors.api_key"
+  },
+  {
+    "check": "secrets",
+    "resourceId": "vendor-profile",
+    "persona": "vendor2",
+    "verdict": "SUSPECTED",
+    "proof": {
+      "request": "GET /api/vendors/v2",
+      "status": 200,
+      "marker": "ARGOS_"
+    },
+    "detail": "owner re-exposed own secret in vendors.api_key",
+    "column": "vendors.api_key"
+  },
+  {
+    "check": "secrets",
+    "resourceId": "vendor-profile",
+    "persona": "vendor2",
+    "verdict": "VULNERABLE",
+    "proof": {
+      "request": "GET /api/vendors/v1",
+      "status": 200,
+      "marker": "ARGOS_"
+    },
+    "detail": "vendor2 received v1's secret from vendors.api_key",
+    "column": "vendors.api_key"
+  },
+  {
+    "check": "secrets",
+    "resourceId": "vendor-profile",
+    "persona": "vendor2",
+    "verdict": "VULNERABLE",
+    "proof": {
+      "request": "GET /api/vendors/v3",
+      "status": 200,
+      "marker": "ARGOS_"
+    },
+    "detail": "vendor2 received v3's secret from vendors.api_key",
+    "column": "vendors.api_key"
+  },
+  {
+    "check": "secrets",
+    "resourceId": "vendor-profile",
+    "persona": "vendor3",
+    "verdict": "SUSPECTED",
+    "proof": {
+      "request": "GET /api/vendors/v3",
+      "status": 200,
+      "marker": "ARGOS_"
+    },
+    "detail": "owner re-exposed own secret in vendors.api_key",
+    "column": "vendors.api_key"
+  },
+  {
+    "check": "secrets",
+    "resourceId": "vendor-profile",
+    "persona": "vendor3",
+    "verdict": "VULNERABLE",
+    "proof": {
+      "request": "GET /api/vendors/v1",
+      "status": 200,
+      "marker": "ARGOS_"
+    },
+    "detail": "vendor3 received v1's secret from vendors.api_key",
+    "column": "vendors.api_key"
+  },
+  {
+    "check": "secrets",
+    "resourceId": "vendor-profile",
+    "persona": "vendor3",
+    "verdict": "VULNERABLE",
+    "proof": {
+      "request": "GET /api/vendors/v2",
+      "status": 200,
+      "marker": "ARGOS_"
+    },
+    "detail": "vendor3 received v2's secret from vendors.api_key",
+    "column": "vendors.api_key"
+  },
+  {
+    "check": "secrets",
+    "resourceId": "dataset-read",
+    "persona": "(all)",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/datasets/:id"
+    },
+    "detail": "no secret marker in any response body or header"
+  },
+  {
+    "check": "secrets",
+    "resourceId": "dataset-search",
+    "persona": "(all)",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/datasets?search="
+    },
+    "detail": "no secret marker in any response body or header"
+  },
+  {
+    "check": "secrets",
+    "resourceId": "dataset-tasks",
+    "persona": "(all)",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/datasets/:id/tasks"
+    },
+    "detail": "no secret marker in any response body or header"
+  },
+  {
+    "check": "secrets",
+    "resourceId": "task-read",
+    "persona": "(all)",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/tasks/:id"
+    },
+    "detail": "no secret marker in any response body or header"
+  },
+  {
+    "check": "secrets",
+    "resourceId": "export",
+    "persona": "(all)",
+    "verdict": "OK",
+    "proof": {
+      "request": "POST /api/export"
+    },
+    "detail": "no secret marker in any response body or header"
+  },
+  {
+    "check": "secrets",
+    "resourceId": "debug-env",
+    "persona": "(all)",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /debug/env"
+    },
+    "detail": "no secret marker in any response body or header"
+  },
+  {
+    "check": "secrets",
+    "resourceId": "health",
+    "persona": "(all)",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /health"
+    },
+    "detail": "no secret marker in any response body or header"
+  },
+  {
+    "check": "secrets",
+    "resourceId": "products",
+    "persona": "(all)",
+    "verdict": "OK",
+    "proof": {
+      "request": "GET /api/products"
+    },
+    "detail": "no secret marker in any response body or header"
+  },
+  {
+    "check": "secrets",
+    "resourceId": "debug-env",
+    "persona": "vendor1",
+    "verdict": "VULNERABLE",
+    "proof": {
+      "request": "GET /debug/env",
+      "status": 200,
+      "marker": "ARGOS_"
+    },
+    "detail": "environment variable JWT_SECRET is exposed in the response of GET /debug/env",
+    "env": "JWT_SECRET"
+  },
+  {
+    "check": "secrets",
+    "resourceId": "debug-env",
+    "persona": "vendor1",
+    "verdict": "VULNERABLE",
+    "proof": {
+      "request": "GET /debug/env",
+      "status": 200,
+      "marker": "ARGOS_"
+    },
+    "detail": "environment variable SECRET_KEY is exposed in the response of GET /debug/env",
+    "env": "SECRET_KEY"
+  },
+  {
+    "check": "secrets",
+    "resourceId": "debug-env",
+    "persona": "vendor1",
+    "verdict": "VULNERABLE",
+    "proof": {
+      "request": "GET /debug/env",
+      "status": 200,
+      "marker": "ARGOS_"
+    },
+    "detail": "environment variable API_KEY is exposed in the response of GET /debug/env",
+    "env": "API_KEY"
+  },
+  {
+    "check": "secrets",
+    "resourceId": "debug-env",
+    "persona": "vendor1",
+    "verdict": "VULNERABLE",
+    "proof": {
+      "request": "GET /debug/env",
+      "status": 200,
+      "marker": "ARGOS_"
+    },
+    "detail": "environment variable STRIPE_SECRET_KEY is exposed in the response of GET /debug/env",
+    "env": "STRIPE_SECRET_KEY"
+  },
+  {
+    "check": "secrets",
+    "resourceId": "(source)",
+    "persona": "(static)",
+    "verdict": "OK",
+    "proof": {
+      "request": "-"
+    },
+    "detail": "no hardcoded secret pattern in 2 source files"
+  }
+]

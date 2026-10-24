@@ -1,15 +1,42 @@
 import type { Config } from "../config.js";
+import type { HttpResult } from "../http.js";
+import type { SeedManifest } from "../seed.js";
 import type { Finding, Matrix } from "../types.js";
 import { bola } from "./bola.js";
+import { secrets } from "./secrets.js";
+import { staticSecrets } from "./static-secrets.js";
+import { sqli } from "./sqli.js";
 import { unauth } from "./unauth.js";
 
-type MatrixCheck = (cfg: Config, m: Matrix) => Finding[];
-
-/** Checks that read the access matrix. sqli/secrets need their own requests and are added in step 6. */
-export const MATRIX_CHECKS: Partial<Record<Finding["check"], MatrixCheck>> = { bola, unauth };
-
-export function runMatrixChecks(cfg: Config, m: Matrix): Finding[] {
-  return cfg.checks.flatMap((name) => MATRIX_CHECKS[name]?.(cfg, m) ?? []);
+export interface CheckContext {
+  cfg: Config;
+  baseUrl: string;
+  matrix: Matrix;
+  /** Raw responses aligned with matrix.cells (see runMatrixDetailed). */
+  raw: (HttpResult | undefined)[];
+  manifest: SeedManifest;
+  /** Original target directory (for the static source scan). */
+  srcDir: string;
 }
 
-export { bola, unauth };
+type CheckFn = (ctx: CheckContext) => Finding[] | Promise<Finding[]>;
+
+export const CHECKS: Record<Finding["check"], CheckFn> = {
+  bola: (c) => bola(c.cfg, c.matrix),
+  unauth: (c) => unauth(c.cfg, c.matrix),
+  sqli: (c) => sqli(c.cfg, c.baseUrl, c.manifest),
+  secrets: (c) => [...secrets(c.cfg, c.matrix, c.raw, c.manifest), ...(c.cfg.secrets.staticScan ? staticSecrets(c.cfg, c.srcDir) : [])],
+};
+
+export async function runChecks(ctx: CheckContext): Promise<Finding[]> {
+  const out: Finding[] = [];
+  for (const name of ctx.cfg.checks) out.push(...(await CHECKS[name](ctx)));
+  return out;
+}
+
+/** bola + unauth only: they need nothing but the matrix. */
+export function runMatrixChecks(cfg: Config, m: Matrix): Finding[] {
+  return cfg.checks.flatMap((name) => (name === "bola" ? bola(cfg, m) : name === "unauth" ? unauth(cfg, m) : []));
+}
+
+export { bola, unauth, sqli, secrets, staticSecrets };

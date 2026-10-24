@@ -25,6 +25,8 @@ const Resource = z.strictObject({
   public: z.boolean().optional(),
   /** Non-read routes are only exercised when explicitly marked safe. */
   safe: z.boolean().optional(),
+  /** Query-string parameters to test for SQL injection (sqli check). */
+  params: z.array(z.string().min(1)).optional(),
 });
 
 export const Config = z
@@ -36,6 +38,17 @@ export const Config = z
       baseUrl: z.string().default("http://127.0.0.1:0"),
       readyPath: z.string().default("/health"),
       env: z.record(z.string(), z.string()).default({}),
+      /** process: run on the host (trusted code only). container: no network, read-only FS, non-root, limits. */
+      isolation: z.enum(["process", "container"]).default("process"),
+      container: z
+        .strictObject({
+          /** Needs `node` inside (the host reaches the app through `docker exec`). Default: node:<host major>-slim. */
+          image: z.string().min(1).optional(),
+          memory: z.string().default("512m"),
+          cpus: z.string().default("1"),
+          pids: z.number().int().positive().default(256),
+        })
+        .default({ memory: "512m", cpus: "1", pids: 256 }),
     }),
     seed: z
       .strictObject({
@@ -54,12 +67,25 @@ export const Config = z
         envCanaries: z
           .array(z.string())
           .default(["JWT_SECRET", "SECRET_KEY", "API_KEY", "STRIPE_SECRET_KEY"]),
+        /** (c) look for hardcoded secrets in the target's source files. */
+        staticScan: z.boolean().default(true),
+        /** Extra path substrings to skip, on top of the defaults (seed*, tests, fixtures, examples, argos config). */
+        staticExclude: z.array(z.string()).default([]),
       })
       .default({
         sensitiveColumns: ["api_key", "token", "secret", "password"],
         allowOwnerSecretRead: false,
         envCanaries: ["JWT_SECRET", "SECRET_KEY", "API_KEY", "STRIPE_SECRET_KEY"],
+        staticScan: true,
+        staticExclude: [],
       }),
+    /** Hints for `argos fix`. Without `principal` only column limiting is applied automatically. */
+    fix: z
+      .strictObject({
+        /** Source expression for the caller's org inside a handler, e.g. `req.user.vendor_id`. */
+        principal: z.string().min(1).optional(),
+      })
+      .optional(),
     mode: z.enum(["report", "block"]).default("report"),
     llm: z
       .strictObject({

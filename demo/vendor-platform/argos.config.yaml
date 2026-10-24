@@ -67,5 +67,7 @@ secrets:
   sensitiveColumns: ["api_key", "token", "secret", "password"]
   allowOwnerSecretRead: false
   envCanaries: ["JWT_SECRET", "SECRET_KEY", "API_KEY", "STRIPE_SECRET_KEY"]
+fix:
+  principal: req.user.vendor_id   # caller's org inside a handler (used by `argos fix`)
 mode: report
 llm: { provider: anthropic, data: files }

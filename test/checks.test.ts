@@ -88,3 +88,67 @@ test("runMatrixChecks respects cfg.checks and findings carry no full markers", a
   for (const marker of allMarkers(manifest)) assert.ok(!dump.includes(marker));
   assert.ok(runMatrixChecks(cfg(), m).some((x) => x.check === "bola"));
 });
+
+import { sqli } from "../src/checks/sqli.js";
+import { createServer } from "node:http";
+
+function sqliApp(mode: "vuln" | "safe" | "crash" | "down-control"): Promise<import("node:http").Server> {
+  return new Promise((ok) => {
+    const srv = createServer((req, res) => {
+      const q = new URL(req.url!, "http://x").searchParams.get("search") ?? "";
+      if (mode === "down-control") return void res.writeHead(503).end();
+      if (mode === "crash") return void res.writeHead(500).end();
+      if (mode === "vuln" && (q.match(/'/g) ?? []).length % 2 === 1) return void res.writeHead(500).end();
+      res.end("[]");
+    }).listen(0, "127.0.0.1", () => ok(srv));
+  });
+}
+const sqliCfg = () => ({ ...cfg(), resources: [{ id: "search", route: "GET /api/search", params: ["search"], expect: { owner: "allow" as const, other: "deny" as const, anonymous: "deny" as const } }] });
+async function runSqli(mode: Parameters<typeof sqliApp>[0]) {
+  const srv = await sqliApp(mode);
+  try {
+    return await sqli(sqliCfg(), `http://127.0.0.1:${(srv.address() as AddressInfo).port}`, manifest);
+  } finally {
+    srv.close();
+  }
+}
+
+test("sqli: odd quote -> 500, escaped -> 200 is red", async () => {
+  const f = (await runSqli("vuln"))[0]!;
+  assert.equal(f.verdict, "VULNERABLE");
+  assert.match(f.proof.note!, /control 200 \/ ' 500 \/ '' 200/);
+});
+
+test("sqli: app that handles quotes is OK", async () => {
+  assert.equal((await runSqli("safe"))[0]!.verdict, "OK");
+});
+
+test("sqli: 500 on everything (even the control) is SKIPPED, not red", async () => {
+  assert.equal((await runSqli("crash"))[0]!.verdict, "SKIPPED");
+  assert.equal((await runSqli("down-control"))[0]!.verdict, "SKIPPED");
+});
+
+test("sqli: only resources with params are tested", async () => {
+  const f = await sqli(cfg(), "http://127.0.0.1:1", manifest);
+  assert.deepEqual(f, []);
+});
+
+test("a proven leak is reported red even without a working control (no legit access exists)", () => {
+  const m: Matrix = {
+    personas: ["anonymous"], resources: ["debug-env"],
+    cells: [{ persona: "anonymous", resource: "debug-env", expected: "deny", observed: "allow", verdict: "VULNERABLE", evidence: { request: "GET /debug/env", status: 200 } }],
+  };
+  const c = { ...cfg(), resources: [{ id: "debug-env", route: "GET /debug/env", expect: { owner: "deny" as const, other: "deny" as const, anonymous: "deny" as const } }] };
+  assert.equal(unauth(c, m)[0]!.verdict, "VULNERABLE");
+});
+
+test("sqli reads the parameter from the route's query string", async () => {
+  const srv = await sqliApp("vuln");
+  try {
+    const c = { ...cfg(), resources: [{ id: "search", route: "GET /api/search?search=", expect: { owner: "allow" as const, other: "deny" as const, anonymous: "deny" as const } }] };
+    const f = await sqli(c, `http://127.0.0.1:${(srv.address() as AddressInfo).port}`, manifest);
+    assert.equal(f[0]!.verdict, "VULNERABLE");
+  } finally {
+    srv.close();
+  }
+});

@@ -3,15 +3,16 @@ import { cpSync, mkdtempSync, rmSync, mkdirSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
+import { realpathSync } from "node:fs";
 import type { Config } from "./config.js";
+import { containerSpec, startContainer } from "./container.js";
+import { RunnerError } from "./errors.js";
+
+export { RunnerError };
 
 export const ISOLATION_WARNING = "격리 없음: 신뢰하는 코드에만 실행하세요 (no sandbox: run trusted code only)";
 
-export class RunnerError extends Error {
-  constructor(message: string, readonly logTail: string[] = []) {
-    super(logTail.length ? `${message}\n--- last ${logTail.length} log lines ---\n${logTail.join("\n")}` : message);
-  }
-}
+export type Isolation = "process" | "container";
 
 export interface RunnerOptions {
   /** Directory the config lives in; target.cwd resolves against it. Default: process.cwd(). */
@@ -22,9 +23,16 @@ export interface RunnerOptions {
   quiet?: boolean;
   /** Runs on the temp copy after copying and before the app starts (e.g. seeding the DB). */
   beforeStart?: (workdir: string) => void | Promise<void>;
+  /** Extra environment variables for the app (e.g. env canaries). Applied after target.env. */
+  extraEnv?: Record<string, string>;
+  /** Overrides cfg.target.isolation. */
+  isolation?: Isolation;
 }
 
 export interface RunningTarget {
+  isolation: Isolation;
+  /** Container image when isolation is "container". */
+  image: string | null;
   baseUrl: string;
   port: number;
   /** Temp copy the app runs in. The original directory is never touched. */
@@ -51,12 +59,13 @@ function freePort(): Promise<number> {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Parent env is NOT forwarded: only PATH, HOME (temp), PORT and target.env. */
-export function buildEnv(cfg: Config, port: number, home: string): Record<string, string> {
+export function buildEnv(cfg: Config, port: number, home: string, extra: Record<string, string> = {}): Record<string, string> {
   return {
     PATH: process.env.PATH ?? "/usr/bin:/bin",
     HOME: home,
     PORT: String(port),
     ...cfg.target.env,
+    ...extra,
   };
 }
 
@@ -74,9 +83,93 @@ async function waitReady(url: string, deadline: number, exited: () => boolean): 
   return false;
 }
 
+/** What the two launch modes have in common once the app is started. */
+interface Launched {
+  baseUrl: string;
+  exited(): boolean;
+  exitCode(): number | null | undefined;
+  logs(n?: number): string[];
+  /** Stops the app. The temp copy is removed by the caller. */
+  stop(): Promise<void>;
+}
+
+function launchProcess(cfg: Config, opts: RunnerOptions, workdir: string, home: string, port: number, killGraceMs: number): Launched {
+  const lines: string[] = [];
+  const push = (chunk: Buffer) => {
+    for (const l of chunk.toString().split("\n")) if (l) lines.push(l);
+    if (lines.length > LOG_LIMIT) lines.splice(0, lines.length - LOG_LIMIT);
+  };
+
+  // detached: own process group, so stop() also reaches grandchildren of `sh -c`.
+  const child: ChildProcess = spawn("sh", ["-c", cfg.target.start], {
+    cwd: workdir,
+    env: buildEnv(cfg, port, home, opts.extraEnv),
+    detached: true,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  child.stdout?.on("data", push);
+  child.stderr?.on("data", push);
+  let exitCode: number | null | undefined;
+  child.once("exit", (code) => (exitCode = code ?? -1));
+  child.once("error", (e) => {
+    lines.push(`spawn error: ${e.message}`);
+    exitCode = -1;
+  });
+
+  const signalGroup = (sig: NodeJS.Signals) => {
+    try {
+      if (child.pid) process.kill(-child.pid, sig);
+    } catch {
+      /* already gone */
+    }
+  };
+  return {
+    baseUrl: cfg.target.baseUrl.replace(/:0(?=\/|$)/, `:${port}`),
+    exited: () => exitCode !== undefined,
+    exitCode: () => exitCode,
+    logs: (n = 50) => lines.slice(-n),
+    stop: async () => {
+      if (exitCode === undefined) {
+        signalGroup("SIGTERM");
+        const until = Date.now() + killGraceMs;
+        while (exitCode === undefined && Date.now() < until) await sleep(50);
+        if (exitCode === undefined) signalGroup("SIGKILL");
+      }
+      signalGroup("SIGKILL"); // sweep stragglers in the group
+    },
+  };
+}
+
+async function launchContainer(cfg: Config, opts: RunnerOptions, workdir: string, port: number): Promise<Launched & { image: string }> {
+  const spec = containerSpec(cfg);
+  const c = await startContainer({
+    // realpath: on macOS the temp dir is a symlink (/var -> /private/var) that Docker's file sharing does not follow
+    workdir: realpathSync(workdir),
+    appPort: port,
+    env: { PORT: String(port), ...cfg.target.env, ...opts.extraEnv },
+    start: cfg.target.start,
+    spec,
+  });
+  return {
+    image: spec.image,
+    baseUrl: cfg.target.baseUrl.replace(/:0(?=\/|$)/, `:${c.hostPort}`),
+    exited: () => c.exitCode() !== undefined,
+    exitCode: () => c.exitCode(),
+    logs: (n = 50) => c.logs(n),
+    stop: () => c.stop(),
+  };
+}
+
 export async function startTarget(cfg: Config, opts: RunnerOptions = {}): Promise<RunningTarget> {
   const { readyTimeoutMs = 30_000, killGraceMs = 5_000 } = opts;
-  if (!opts.quiet) console.error(`⚠️  ${ISOLATION_WARNING}`);
+  const isolation: Isolation = opts.isolation ?? cfg.target.isolation;
+  if (!opts.quiet) {
+    console.error(
+      isolation === "container"
+        ? `🔒 container isolation: ${containerSpec(cfg).image}, no network, read-only root filesystem, non-root, resource limits`
+        : `⚠️  ${ISOLATION_WARNING}`,
+    );
+  }
 
   const srcDir = resolve(opts.baseDir ?? process.cwd(), cfg.target.cwd);
   const root = mkdtempSync(join(tmpdir(), "argos-run-"));
@@ -106,60 +199,40 @@ export async function startTarget(cfg: Config, opts: RunnerOptions = {}): Promis
   }
 
   const port = await freePort();
-  const baseUrl = cfg.target.baseUrl.replace(/:0(?=\/|$)/, `:${port}`);
-  const lines: string[] = [];
-  const push = (chunk: Buffer) => {
-    for (const l of chunk.toString().split("\n")) if (l) lines.push(l);
-    if (lines.length > LOG_LIMIT) lines.splice(0, lines.length - LOG_LIMIT);
-  };
-
-  // detached: own process group, so stop() also reaches grandchildren of `sh -c`.
-  const child: ChildProcess = spawn("sh", ["-c", cfg.target.start], {
-    cwd: workdir,
-    env: buildEnv(cfg, port, home),
-    detached: true,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  child.stdout?.on("data", push);
-  child.stderr?.on("data", push);
-  let exitCode: number | null | undefined;
-  child.once("exit", (code) => (exitCode = code ?? -1));
-  child.once("error", (e) => {
-    lines.push(`spawn error: ${e.message}`);
-    exitCode = -1;
-  });
-
-  const signalGroup = (sig: NodeJS.Signals) => {
-    try {
-      if (child.pid) process.kill(-child.pid, sig);
-    } catch {
-      /* already gone */
-    }
-  };
+  let launched: Launched & { image?: string };
+  try {
+    launched = isolation === "container" ? await launchContainer(cfg, opts, workdir, port) : launchProcess(cfg, opts, workdir, home, port, killGraceMs);
+  } catch (e) {
+    cleanup();
+    throw e;
+  }
 
   let stopped: Promise<void> | undefined;
   const stop = () =>
     (stopped ??= (async () => {
-      if (exitCode === undefined) {
-        signalGroup("SIGTERM");
-        const until = Date.now() + killGraceMs;
-        while (exitCode === undefined && Date.now() < until) await sleep(50);
-        if (exitCode === undefined) signalGroup("SIGKILL");
-      }
-      signalGroup("SIGKILL"); // sweep stragglers in the group
+      await launched.stop();
       cleanup();
     })());
 
-  const ok = await waitReady(baseUrl + cfg.target.readyPath, Date.now() + readyTimeoutMs, () => exitCode !== undefined);
+  const ok = await waitReady(launched.baseUrl + cfg.target.readyPath, Date.now() + readyTimeoutMs, launched.exited);
   if (!ok) {
+    const code = launched.exitCode();
     const reason =
-      exitCode !== undefined
-        ? `target exited with code ${exitCode} before becoming ready`
+      code !== undefined
+        ? `target exited with code ${code} before becoming ready`
         : `target not ready: GET ${cfg.target.readyPath} did not return 200 within ${readyTimeoutMs}ms`;
-    const tail = lines.slice(-50);
+    const tail = launched.logs(50);
     await stop();
     throw new RunnerError(reason, tail);
   }
 
-  return { baseUrl, port, workdir, logs: (n = 50) => lines.slice(-n), stop };
+  return {
+    isolation,
+    image: launched.image ?? null,
+    baseUrl: launched.baseUrl,
+    port: Number(new URL(launched.baseUrl).port),
+    workdir,
+    logs: launched.logs,
+    stop,
+  };
 }

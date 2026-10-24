@@ -1,0 +1,115 @@
+{
+  "tool": {
+    "name": "argos",
+    "version": "0.0.0"
+  },
+  "startedAt": "2026-10-24T04:49:17.158Z",
+  "finishedAt": "2026-10-24T04:49:17.669Z",
+  "durationMs": 511,
+  "target": "vendor-platform",
+  "mode": "report",
+  "isolation": "process",
+  "image": null,
+  "config": {
+    "file": "argos.config.yaml",
+    "sha256": "42d07c29ab032240f16607a8cf4d24c5ef65bf4f82c1a150b1d6ab27fc196143"
+  },
+  "seed": {
+    "schema": {
+      "file": "schema.sql",
+      "sha256": "a8f55ad7c4b6466711249bc8ac77ab96cc16f9635e8953452cccd11dc7080dd8"
+    },
+    "rows": null
+  },
+  "checks": [
+    "bola",
+    "unauth",
+    "sqli",
+    "secrets"
+  ],
+  "personas": [
+    {
+      "name": "vendor1",
+      "org": "v1"
+    },
+    {
+      "name": "vendor2",
+      "org": "v2"
+    },
+    {
+      "name": "vendor3",
+      "org": "v3"
+    },
+    {
+      "name": "anonymous",
+      "org": null
+    }
+  ],
+  "resources": [
+    {
+      "id": "dataset-read",
+      "route": "GET /api/datasets/:id",
+      "public": false
+    },
+    {
+      "id": "dataset-search",
+      "route": "GET /api/datasets?search=",
+      "public": false
+    },
+    {
+      "id": "dataset-tasks",
+      "route": "GET /api/datasets/:id/tasks",
+      "public": false
+    },
+    {
+      "id": "task-read",
+      "route": "GET /api/tasks/:id",
+      "public": false
+    },
+    {
+      "id": "vendor-profile",
+      "route": "GET /api/vendors/:id",
+      "public": false
+    },
+    {
+      "id": "export",
+      "route": "POST /api/export",
+      "public": false
+    },
+    {
+      "id": "debug-env",
+      "route": "GET /debug/env",
+      "public": false
+    },
+    {
+      "id": "health",
+      "route": "GET /health",
+      "public": true
+    },
+    {
+      "id": "products",
+      "route": "GET /api/products",
+      "public": true
+    }
+  ],
+  "results": {
+    "cells": 72,
+    "findings": 66,
+    "counts": {
+      "VULNERABLE": 25,
+      "SUSPECTED": 3,
+      "OK": 38,
+      "SKIPPED": 0
+    }
+  },
+  "files": {
+    "matrix": {
+      "file": "matrix.json",
+      "sha256": "8f9547c73d02c1df98e9a776daee11f33d809baece46f8514608dd145ba17233"
+    },
+    "findings": {
+      "file": "findings.json",
+      "sha256": "68cfd654754bd173dcf09d4126b61557d3edf2c251b8dffc460763359c92a499"
+    }
+  }
+}

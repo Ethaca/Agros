@@ -23,7 +23,8 @@ export function bola(cfg: Config, m: Matrix): Finding[] {
 
     const attackerControl = ownCell(cfg, m, attackerOrg, c.resource);
     const victimControl = ownCell(cfg, m, c.target, c.resource);
-    const broken =
+    // A proven leak needs no control; only "denied = OK" depends on the controls working.
+    const broken = c.verdict === "VULNERABLE" ? undefined :
       attackerControl?.verdict !== "OK"
         ? `attacker control for ${c.persona} did not succeed`
         : victimControl?.verdict !== "OK"

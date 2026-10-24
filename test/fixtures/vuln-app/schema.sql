@@ -4,3 +4,8 @@ CREATE TABLE datasets (
   name TEXT NOT NULL,
   rows INTEGER NOT NULL
 );
+CREATE TABLE vendors (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  api_key TEXT NOT NULL
+);

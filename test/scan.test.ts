@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, existsSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, existsSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { runScan } from "../src/scan.js";
 import { Finding, Matrix } from "../src/types.js";
 
@@ -43,9 +43,34 @@ test("--checks overrides config; unknown check is an error", async () => {
   await assert.rejects(run("argos.config.yaml", { checks: ["nope"] }), /unknown check "nope"/);
 });
 
-test("checks without an implementation are reported, not silently dropped", async () => {
-  const r = await run("argos.config.yaml", { checks: ["bola", "sqli", "secrets"] });
-  assert.deepEqual(r.notRun, ["sqli", "secrets"]);
+test("all four checks are implemented, nothing is silently dropped", async () => {
+  const r = await run("argos.config.yaml");
+  assert.deepEqual(r.notRun, []);
+  assert.deepEqual([...new Set(r.findings.map((f) => f.check))].sort(), ["bola", "secrets", "sqli", "unauth"]);
+});
+
+test("sqli (flaw 3) and secrets (flaw 4) are red on the flawed app, with masked proof", async () => {
+  const r = await run("argos.config.yaml");
+  const sqli = r.findings.find((f) => f.check === "sqli" && f.verdict === "VULNERABLE")!;
+  assert.equal(sqli.resourceId, "dataset-search");
+  assert.match(sqli.proof.note!, /control 200 \/ ' 500 \/ '' 200/);
+
+  const leaks = r.findings.filter((f) => f.check === "secrets" && f.column && f.verdict === "VULNERABLE");
+  assert.deepEqual(leaks.map((f) => f.persona).sort(), ["anonymous", "vendor1", "vendor2"]); // (a) column leaks only
+  assert.ok(leaks.every((f) => f.column === "vendors.api_key" && f.proof.marker === "ARGOS_"));
+  // owner reading own key: reported as SUSPECTED, not red
+  assert.ok(r.findings.some((f) => f.check === "secrets" && f.verdict === "SUSPECTED" && /owner re-exposed/.test(f.detail)));
+
+  const dump = readFileSync(r.files.findings, "utf8") + readFileSync(r.files.matrix, "utf8");
+  assert.ok(!/ARGOS_SECRET_\d+_[0-9a-f]{6}/.test(dump), "no full secret marker in output files");
+});
+
+test("fixed app: sqli and secrets are green", async () => {
+  const r = await run("fixed.config.yaml");
+  assert.equal(r.counts.VULNERABLE, 0);
+  assert.equal(r.counts.SUSPECTED, 0, JSON.stringify(r.findings.filter((f) => f.verdict === "SUSPECTED")));
+  assert.equal(r.findings.find((f) => f.check === "sqli")!.verdict, "OK");
+  assert.ok(r.findings.filter((f) => f.check === "secrets").every((f) => f.verdict === "OK"));
 });
 
 test("original fixture dir is untouched (scan runs on a temp copy)", async () => {
@@ -68,4 +93,37 @@ test("CLI: exit codes 0 / 2 / 1 and output files", () => {
   const bad = cli(["--config", "nope.yaml"]);
   assert.equal(bad.status, 1);
   assert.match(bad.stderr, /^argos: .*nope\.yaml: cannot read file/);
+});
+
+test("env canary leak (flaw 5) is red on the flawed app and the fixed app is clean", async () => {
+  const bad = await run("argos.config.yaml");
+  const envLeaks = bad.findings.filter((f) => f.check === "secrets" && f.env && f.verdict === "VULNERABLE");
+  assert.ok(envLeaks.length >= 1);
+  assert.ok(envLeaks.every((f) => f.resourceId === "debug-env" && f.proof.marker === "ARGOS_"));
+  assert.ok(bad.findings.some((f) => f.check === "unauth" && f.resourceId === "debug-env" && f.verdict === "VULNERABLE"));
+  const dump = readFileSync(bad.files.findings, "utf8");
+  assert.ok(!/ARGOS_ENV_[A-Z_]+_[0-9a-f]{6}/.test(dump), "no full canary value in output");
+
+  const ok = await run("fixed.config.yaml");
+  assert.equal(ok.counts.VULNERABLE, 0);
+  assert.equal(ok.counts.SKIPPED, 0, JSON.stringify(ok.findings.filter((f) => f.verdict === "SKIPPED")));
+});
+
+test("static secrets (c): a hardcoded key in the source is yellow, masked everywhere, and does not fail the run", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "argos-scan-static-"));
+  cpSync(resolve(FX), dir, { recursive: true });
+  const KEY = "sk-abcdefghijklmnopqrstuvwx1234";
+  writeFileSync(join(dir, "payments.mjs"), `export const STRIPE = "${KEY}";\n`);
+  const r = await runScan({ configPath: join(dir, "block.config.yaml"), outDir: out(), quiet: true, log: () => {} });
+  const hit = r.findings.find((f) => f.persona === "(static)" && f.verdict === "SUSPECTED")!;
+  assert.equal(hit.proof.request, "payments.mjs:1");
+  assert.match(hit.detail, /sk-a… \(31 chars\)/);
+  const dump = readFileSync(r.files.findings, "utf8") + readFileSync(r.files.matrix, "utf8") + readFileSync(r.files.meta, "utf8");
+  assert.ok(!dump.includes(KEY), "full key must not reach any output file");
+  assert.equal(r.exitCode, 2, "block mode is driven by the red findings of the flawed app, not by the yellow static hit");
+});
+
+test("static secrets (c) reports OK on the fixed fixture app", async () => {
+  const on = await run("fixed.config.yaml");
+  assert.ok(on.findings.some((f) => f.persona === "(static)" && f.verdict === "OK"));
 });
