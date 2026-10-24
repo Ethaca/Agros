@@ -15,6 +15,7 @@
 | `checks` | 실행할 점검 | 4종 전부 |
 | `secrets` | `sensitiveColumns`, `allowOwnerSecretRead`, `envCanaries`, `staticScan`, `staticExclude` | 아래 참고 |
 | `fix.principal` | 핸들러 안에서 호출자 조직을 가리키는 식. 예: `req.user.vendor_id` | 없음 |
+| `provenance` | 필드별 출처: `confirmed`(사람) \| `ai-draft`. 키는 `resources.<id>.expect`/`.public`/`.safe`, `personas`, `fix.principal`. `argos init`이 채우고, 미확인 항목은 `scan-meta.json`과 보고서에 표시된다 | 없음 |
 | `mode` | `report` \| `block` | `report` |
 | `llm` | `init`의 LLM 전송 범위(`files` \| `none`) | `files` |
 

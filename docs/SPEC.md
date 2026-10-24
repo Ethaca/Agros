@@ -178,6 +178,10 @@ llm: { provider: anthropic, data: files }   # files | none
 | V4 | 비밀·마커 전체 값은 싣지 않는다(앞 6자) | MUST |
 | V5 | PR 코멘트용 요약(마크다운, 길이 제한) | SHOULD |
 | V6 | PDF 내보내기, 전송(허용 목록, 확인, 기록) | LATER, 최하위 |
+| V7 | 보고서는 기본적으로 영어로 생성한다. 한국어(`ko`)도 선택할 수 있으며, 제목·요약·표의 헤더·판정 설명·한계 문구를 모두 같은 언어로 렌더링한다. | MUST |
+
+- `argos report`의 기본 언어는 영어다. `--lang en`과 `--lang ko`를 지원하며, CI와 PR 코멘트도 선택한 언어를 따른다.
+- 언어 선택은 보고서의 표현만 바꾼다. `matrix.json`, `findings.json` 등 기계가 읽는 결과와 판정 값(`VULNERABLE`, `SUSPECTED`, `OK`, `SKIPPED`)은 언어와 무관하게 안정적으로 유지한다.
 
 ### 6.7 `argos init` (FR-I) — PLUG
 
@@ -200,7 +204,7 @@ LLM 호출은 `@anthropic-ai/sdk`를 쓰고 모델 ID는 `ARGOS_MODEL` 환경변
 argos init   <dir|openapi.json> [--llm-data none|files] [--out argos.config.yaml]
 argos scan   [--config argos.config.yaml] [--checks bola,unauth,sqli,secrets] [--out out/]
 argos fix    [--config ...] [--apply]                       # SHOULD
-argos report [--scan out/] [--format md] [--out out/report.md]
+argos report [--scan out/] [--format md] [--lang en|ko] [--out out/report.md]
 ```
 
 - 종료 코드: `0` 정상(🔴 없음 또는 `mode: report`), `1` 오류, `2` `mode: block`이고 🔴가 있을 때. **기본 모드가 `report`이므로 기본은 🔴가 있어도 0.**

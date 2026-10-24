@@ -10,13 +10,13 @@ Argos는 실행 중인 API를 여러 페르소나(벤더 A, 벤더 B, 익명)로
 |---|---|---|
 | PROVE | 페르소나 × 리소스 공격, 점검 4종, 접근 매트릭스 | ✅ 구현 |
 | VOUCH | 증빙 리포트(증빙 헤더, 매트릭스, 한계 문구) | ✅ `argos report`(첫 버전, A 구현이 들어오면 교체 가능) |
-| PLUG | `argos init`: 저장소를 읽어 설정 초안을 AI로 생성, 기동 검증 | ⬜ A 작업 |
+| PLUG | `argos init`: 저장소를 읽어 설정 초안 생성, 기동·로그인 검증 | 🔶 v1 구현(정적 규칙, express-sqlite). LLM 초안·`--update`는 아직 |
 
 후순위: TRACE(카나리 발급·식별·오염 탐지). 최하위: PDF 내보내기·전송. 이번 범위 밖.
 
 ## 사용자 흐름
 ```
-argos init <repo>   → argos.config.yaml 초안 (스키마 검증 + 기동 검증)      ⬜
+argos init <repo>   → argos.config.yaml 초안 + 기동·로그인 검증 + 확인 목록   ✅ v1(LLM 없는 정적 규칙)
 argos scan          → out/matrix.json, findings.json, scan-meta.json        ✅
 argos fix [--apply] → 수정 제안, 같은 매트릭스로 재검증, 채택분만 적용       ✅
 argos report        → out/report.md (증빙 헤더 + 한계 문구)                  ✅

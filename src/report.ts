@@ -106,12 +106,20 @@ export function renderReport(scan: LoadedScan): string {
   push(`| matrix.json | SHA-256 ${short(meta.files.matrix.sha256)} |`);
   push(`| findings.json | SHA-256 ${short(meta.files.findings.sha256)} |`);
   push(`| 점검 | ${meta.checks.join(", ")} |`);
+  push(`| 설정 확인 상태 | ${meta.unconfirmed.length ? `**AI 초안 ${meta.unconfirmed.length}개 미확인** (사람이 확인하기 전의 기대 규칙·공개 여부·안전 표시)` : "모두 사람이 확인함"} |`);
   push(`| 페르소나 | ${meta.personas.map((p) => (p.org ? `${p.name} (${p.org})` : p.name)).join(", ")} |`, "");
   push(`**무결성:** ${scan.integrity.map((i) => `${i.file} ${i.ok ? "✅ 일치" : "❌ 불일치"}`).join(" · ")} (헤더의 해시를 파일에서 다시 계산한 값과 비교)`, "");
 
   push("**시험한 범위** — 아래 목록에 없는 경로는 시험하지 않았다.", "", "| 리소스 | 경로 | 공개 |", "|---|---|---|");
   for (const r of meta.resources) push(`| ${cell(r.id)} | \`${cell(r.route)}\` | ${r.public ? "예" : "아니오"} |`);
   push("");
+
+  if (meta.unconfirmed.length) {
+    push(`> ⚠️ **미확인 기대 규칙 ${meta.unconfirmed.length}개.** 아래 판정은 AI가 초안으로 만든 "누가 무엇을 볼 수 있는가" 규칙을 기준으로 한다. 사람이 확인하기 전까지는 규칙 자체가 틀렸을 수 있다.`, "");
+    for (const k of meta.unconfirmed.slice(0, 12)) push(`> - \`${cell(k)}\``);
+    if (meta.unconfirmed.length > 12) push(`> - … 외 ${meta.unconfirmed.length - 12}개`);
+    push("");
+  }
 
   // --- summary
   push("## 요약", "", `| 점검 | ${VERDICTS.map((v) => `${ICON[v]} ${LABEL[v]}`).join(" | ")} |`, `|---|${VERDICTS.map(() => "---:").join("|")}|`);

@@ -3,9 +3,9 @@
     "name": "argos",
     "version": "0.0.0"
   },
-  "startedAt": "2026-10-24T04:49:17.158Z",
-  "finishedAt": "2026-10-24T04:49:17.669Z",
-  "durationMs": 511,
+  "startedAt": "2026-10-24T05:24:23.498Z",
+  "finishedAt": "2026-10-24T05:24:23.998Z",
+  "durationMs": 500,
   "target": "vendor-platform",
   "mode": "report",
   "isolation": "process",
@@ -27,6 +27,7 @@
     "sqli",
     "secrets"
   ],
+  "unconfirmed": [],
   "personas": [
     {
       "name": "vendor1",

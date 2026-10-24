@@ -3,7 +3,7 @@ import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, statSync, w
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { dockerStatus } from "../../src/container.js";
-import type { Finding, Matrix, Verdict } from "../../src/types.js";
+import type { Finding, Matrix, ScanMeta, Verdict } from "../../src/types.js";
 
 export const ROOT = resolve(".");
 export const APPS = ["vendor-platform", "realistic-app"] as const;
@@ -42,7 +42,7 @@ export interface CliResult {
 
 export function cli(args: string[], env: NodeJS.ProcessEnv = {}): CliResult {
   const t0 = Date.now();
-  const r = spawnSync("node", ["--import", "tsx", "src/cli.ts", ...args], { cwd: ROOT, encoding: "utf8", timeout: 170_000, env: { ...process.env, ...env } });
+  const r = spawnSync("node", ["--import", "tsx", "src/cli.ts", ...args], { cwd: ROOT, encoding: "utf8", timeout: 170_000, env: { ...process.env, CI: "", ...env } });
   return { status: r.status, stdout: r.stdout, stderr: r.stderr, ms: Date.now() - t0 };
 }
 
@@ -50,6 +50,7 @@ export interface ScanRun extends CliResult {
   out: string;
   matrix: Matrix;
   findings: Finding[];
+  meta: ScanMeta;
   counts: Record<Verdict, number>;
 }
 
@@ -62,9 +63,10 @@ export function scan(config: string, extra: string[] = []): ScanRun {
   const r = scanConfig(config, extra);
   const matrix = JSON.parse(readFileSync(join(r.out, "matrix.json"), "utf8")) as Matrix;
   const findings = JSON.parse(readFileSync(join(r.out, "findings.json"), "utf8")) as Finding[];
+  const meta = JSON.parse(readFileSync(join(r.out, "scan-meta.json"), "utf8")) as ScanMeta;
   const counts = { VULNERABLE: 0, SUSPECTED: 0, OK: 0, SKIPPED: 0 } as Record<Verdict, number>;
   for (const f of findings) counts[f.verdict]++;
-  return { ...r, matrix, findings, counts };
+  return { ...r, matrix, findings, meta, counts };
 }
 
 const memo = new Map<string, ScanRun>();

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { PrError, openFixPr } from "../src/pr.js";
+import { PrError, ciBase, onFixBranch, openFixPr } from "../src/pr.js";
 import { gitLab } from "./helpers/git-lab.js";
 
 const FX = resolve("test/fixtures/vuln-app");
@@ -60,17 +60,36 @@ test("not a repo, no remote, detached HEAD without --base: clear errors", async 
 
   const lab2 = gitLab(FX);
   lab2.git("checkout", "--quiet", "--detach");
-  const saved = process.env.GITHUB_BASE_REF;
-  delete process.env.GITHUB_BASE_REF;
+  const saved = { ...process.env };
+  for (const k of ["GITHUB_BASE_REF", "GITHUB_HEAD_REF", "GITHUB_REF_NAME", "GITHUB_REF_TYPE"]) delete process.env[k];
   try {
     assert.throws(() => openFixPr({ dir: lab2.work, apply: edit(lab2.work), title: "t", body: "b" }), /pass --base/);
-    process.env.GITHUB_BASE_REF = "main";
+    process.env.GITHUB_HEAD_REF = "feature/login";
     const r = await withPath(lab2.path, () => openFixPr({ dir: lab2.work, apply: edit(lab2.work), title: "t", body: "b" }));
-    assert.equal(r.base, "main", "$GITHUB_BASE_REF is used in CI");
+    assert.equal(r.base, "feature/login", "in CI the fix PR targets the user's branch");
   } finally {
-    if (saved === undefined) delete process.env.GITHUB_BASE_REF;
-    else process.env.GITHUB_BASE_REF = saved;
+    for (const k of ["GITHUB_BASE_REF", "GITHUB_HEAD_REF", "GITHUB_REF_NAME", "GITHUB_REF_TYPE"]) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
   }
+});
+
+test("ciBase: the PR's source branch on pull_request, the pushed branch on push, never the merge ref", () => {
+  assert.equal(ciBase({ GITHUB_HEAD_REF: "feature/login", GITHUB_BASE_REF: "main", GITHUB_REF_NAME: "7/merge", GITHUB_REF_TYPE: "branch" }), "feature/login");
+  assert.equal(ciBase({ GITHUB_REF_TYPE: "branch", GITHUB_REF_NAME: "main" }), "main");
+  assert.equal(ciBase({ GITHUB_REF_TYPE: "tag", GITHUB_REF_NAME: "v1", GITHUB_BASE_REF: "main" }), "main");
+  assert.equal(ciBase({}), undefined);
+});
+
+test("onFixBranch: an argos fix branch (checked out or from the CI env) never gets a PR of its own", async () => {
+  const lab = gitLab(FX);
+  assert.equal(onFixBranch(lab.work, {}), false);
+  assert.equal(onFixBranch(lab.work, { GITHUB_HEAD_REF: "argos/fix-abc123-xyz" }), true);
+  assert.equal(onFixBranch(lab.work, { GITHUB_REF_TYPE: "branch", GITHUB_REF_NAME: "argos/fix-abc123-xyz" }), true);
+  assert.equal(onFixBranch(lab.work, { GITHUB_HEAD_REF: "argos-notes" }), false);
+  lab.git("checkout", "-q", "-b", "argos/fix-abc123-xyz");
+  assert.equal(onFixBranch(lab.work, {}), true);
 });
 
 test("patches that change nothing: no commit, no push, no leftover branch", async () => {
