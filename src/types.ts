@@ -83,6 +83,8 @@ export const ScanMeta = z.strictObject({
     })
     .nullable(),
   checks: z.array(CheckName),
+  /** Config fields still marked `ai-draft` (no person has confirmed them), e.g. `resources.get-datasets-id.expect`. */
+  unconfirmed: z.array(z.string()),
   personas: z.array(z.strictObject({ name: z.string(), org: z.string().nullable() })),
   /** Everything that was tested: a route not listed here was not tested (blackbox scope). */
   resources: z.array(z.strictObject({ id: z.string(), route: z.string(), public: z.boolean() })),

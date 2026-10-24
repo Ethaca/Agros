@@ -3,7 +3,7 @@ import { dirname, join, resolve } from "node:path";
 import { loadConfig } from "./config.js";
 import { runFix, type FixReport } from "./fix/index.js";
 import { applyEdits } from "./fix/rules.js";
-import { openFixPr, type PrResult } from "./pr.js";
+import { onFixBranch, openFixPr, type PrResult } from "./pr.js";
 import { renderSummary, writeReport } from "./report.js";
 import type { Isolation } from "./runner.js";
 
@@ -12,7 +12,10 @@ export interface CiOptions {
   outDir: string;
   /** Write the verified patches into the working tree (no git). */
   apply?: boolean;
-  /** Branch + commit + push + open a PR with the verified patches. Needs git, a remote and `gh`. */
+  /**
+   * Fix branch + commit + push + PR with the verified patches (needs git, a remote and `gh`).
+   * undefined = automatic: on in CI ($CI is set), off on a developer machine. true/false force it.
+   */
   pr?: boolean;
   base?: string;
   timeoutMs?: number;
@@ -20,6 +23,9 @@ export interface CiOptions {
   quiet?: boolean;
   log?: (line: string) => void;
 }
+
+/** GitHub Actions and most CI systems set CI=true. */
+export const inCi = (env: NodeJS.ProcessEnv = process.env): boolean => !!env.CI && env.CI !== "false" && env.CI !== "0";
 
 export interface CiResult {
   /** 0, or 2 when mode is block and the scanned code has red findings. (1 = thrown error.) */
@@ -64,9 +70,11 @@ export async function runCi(opts: CiOptions): Promise<CiResult> {
   const files = [...new Set(edits.map((e) => e.file))].map((f) => join(srcDir, f));
   let pr: PrResult | null = null;
 
-  log("\n[4/4] apply");
-  if (opts.pr) {
+  const wantPr = opts.pr ?? inCi();
+  log(`\n[4/4] ${wantPr ? "fix branch + PR" : "apply"}${opts.pr === undefined ? ` (PR ${wantPr ? "on" : "off"}: ${wantPr ? "CI environment" : "not in CI; use --pr to force"})` : ""}`);
+  if (wantPr) {
     if (!edits.length) log("no verified patch, so no PR was opened.");
+    else if (onFixBranch(srcDir)) log("this is already an argos fix branch: no PR is opened for a fix PR.");
     else {
       pr = openFixPr({
         dir: srcDir,
@@ -82,7 +90,7 @@ export async function runCi(opts: CiOptions): Promise<CiResult> {
     applyEdits(srcDir, edits);
     log(`applied ${edits.length} edit(s) to the working tree: ${files.join(", ")}`);
   } else {
-    log(edits.length ? "verified patches were NOT written (use --pr to open a fix PR, or --apply to write them)." : "nothing to apply.");
+    log(edits.length ? "verified patches were NOT written (--pr opens a fix PR on a new branch, --apply writes them into the working tree)." : "nothing to apply.");
   }
 
   const exitCode: 0 | 2 = cfg.mode === "block" && fix.before.VULNERABLE > 0 ? 2 : 0;

@@ -2,6 +2,7 @@
 import { Command } from "commander";
 import { ConfigError } from "./config.js";
 import { runCi } from "./ci.js";
+import { InitError, runInit } from "./init/index.js";
 import { runFix } from "./fix/index.js";
 import { PrError } from "./pr.js";
 import { ReportError, writeReport } from "./report.js";
@@ -18,14 +19,44 @@ function parseIsolation(v?: string): "process" | "container" | undefined {
 }
 
 const isUserError = (e: unknown): boolean =>
-  e instanceof ConfigError || e instanceof RunnerError || e instanceof ScanError || e instanceof SeedError || e instanceof ReportError || e instanceof PrError;
+  e instanceof ConfigError || e instanceof RunnerError || e instanceof ScanError || e instanceof SeedError || e instanceof ReportError || e instanceof PrError || e instanceof InitError;
 
 const program = new Command();
 program.name("argos").description("Prove, vouch, and plug access-control checks");
 
-program.command("init <repo>").description("Draft argos.config.yaml for a repo").action(() => {
-  console.log("argos init: not implemented yet");
-});
+program
+  .command("init [dir]")
+  .description("Draft argos.config.yaml from the repository, then verify that the app starts and each persona can log in")
+  .option("--out <path>", "config file to write (default: <dir>/argos.config.yaml)")
+  .option("--report <dir>", "where init-report.md and init-egress.json go", "out")
+  .option("--isolation <mode>", "process | container: how the app is started to verify the draft (default: container)")
+  .option("--llm-data <mode>", "none | files: what may be sent to the LLM (default: none until the LLM step exists)")
+  .option("--start <command>", "start command, when it cannot be detected")
+  .option("--no-verify", "write the draft without starting the app")
+  .option("--force", "overwrite an existing config")
+  .option("--timeout <seconds>", "verification timeout", "120")
+  .action(async (dir: string | undefined, o: { out?: string; report: string; isolation?: string; llmData?: string; start?: string; verify: boolean; force?: boolean; timeout: string }) => {
+    try {
+      if (o.llmData !== undefined && o.llmData !== "none" && o.llmData !== "files") throw new ConfigError(`--llm-data: expected "none" or "files", got "${o.llmData}"`);
+      const r = await runInit({
+        dir: dir ?? ".",
+        out: o.out,
+        reportDir: o.report,
+        isolation: parseIsolation(o.isolation),
+        llmData: o.llmData as "none" | "files" | undefined,
+        start: o.start,
+        verify: o.verify,
+        force: !!o.force,
+        timeoutMs: Number(o.timeout) * 1000,
+      });
+      process.exitCode = r.exitCode;
+    } catch (e) {
+      if (isUserError(e)) {
+        console.error(`argos: ${(e as Error).message}`);
+        process.exitCode = 1;
+      } else throw e;
+    }
+  });
 program
   .command("scan")
   .description("Run persona x resource attack matrix")
@@ -96,11 +127,12 @@ program
   .option("--timeout <seconds>", "per-scan timeout", "300")
   .option("--isolation <mode>", "process | container (overrides target.isolation)")
   .option("--apply", "write the verified patches into the working tree")
-  .option("--pr", "push a branch with the verified patches and open a PR (needs git, a remote, gh)")
-  .option("--base <branch>", "branch the PR targets (default: $GITHUB_BASE_REF or the current branch)")
+  .option("--pr", "push a NEW branch with the verified patches and open a PR (default: on in CI, off locally)")
+  .option("--no-pr", "never open a PR, even in CI")
+  .option("--base <branch>", "branch the PR targets (default in GitHub Actions: the PR's source branch or the pushed branch; else the current branch)")
   .action(async (o: { config: string; out: string; timeout: string; isolation?: string; apply?: boolean; pr?: boolean; base?: string }) => {
     try {
-      const r = await runCi({ configPath: o.config, outDir: o.out, timeoutMs: Number(o.timeout) * 1000, isolation: parseIsolation(o.isolation), apply: !!o.apply, pr: !!o.pr, base: o.base });
+      const r = await runCi({ configPath: o.config, outDir: o.out, timeoutMs: Number(o.timeout) * 1000, isolation: parseIsolation(o.isolation), apply: !!o.apply, pr: o.pr, base: o.base });
       process.exitCode = r.exitCode;
     } catch (e) {
       if (isUserError(e)) {

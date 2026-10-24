@@ -51,6 +51,7 @@ pnpm run examples:update     # = argos scan --config demo/vendor-platform/argos.
 | 필드 | 뜻 |
 |---|---|
 | `tool.version`, `startedAt`, `finishedAt`, `durationMs` | 도구 버전과 실행 시각(UTC) |
+| `unconfirmed` | 사람이 확인하지 않은(`ai-draft`) 설정 필드 목록. 비어 있지 않으면 보고서가 "미확인 기대 규칙" 경고를 띄운다 |
 | `target` | 설정이 있는 디렉터리 이름 |
 | `config.sha256`, `seed.schema.sha256` | 설정 파일, 시드 스키마 파일의 SHA-256 (파일 내용 기준) |
 | `checks`, `personas`, `resources` | 시험 범위. **여기 없는 라우트는 시험하지 않았다** |
