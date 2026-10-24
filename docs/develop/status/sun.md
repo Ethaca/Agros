@@ -18,7 +18,7 @@
                │
  [Step 4]   ✅ checks/bola.ts, unauth.ts        ← 크리티컬 패스 끝
                │
- [Step 5]   ⬜ cli.ts scan 연결  (out/matrix.json, findings.json)
+ [Step 5]   ✅ scan.ts + cli.ts scan 연결  (out/matrix.json, findings.json)
                │
  [Step 6]   ⬜ checks/sqli.ts, secrets.ts
  [Step 7]   ⬜ fix/  (SHOULD)
@@ -34,7 +34,8 @@
 | ✅ | seed | `src/seed.ts` | 7개 |
 | ✅ | http + matrix | `src/http.ts`, `src/matrix.ts` | 8개 |
 | ✅ | bola + unauth | `src/checks/*` | 8개 |
-| ⬜ | Step 5~8 | - | - |
+| ✅ | scan 명령 (e2e) | `src/scan.ts`, `src/cli.ts` | 8개 |
+| ⬜ | Step 6~8 | - | - |
 
 ## 완료 내용
 
@@ -49,14 +50,17 @@
 ```bash
 pnpm install                 # 최초 1회 (esbuild 빌드는 pnpm-workspace.yaml에서 허용됨)
 pnpm run typecheck           # 타입 검사
-pnpm test                    # 전체 단위 테스트 (현재 38개)
+pnpm test                    # 전체 단위 테스트 (현재 46개)
 
 # 파일 하나만
 node --import tsx --test test/config.test.ts
 node --import tsx --test test/runner.test.ts
 node --import tsx --test test/seed.test.ts
 
-# CLI 뼈대 확인 (각 명령은 아직 "not implemented yet"만 출력)
+# scan 직접 실행 (테스트용 결함 앱: test/fixtures/vuln-app)
+pnpm argos scan --config test/fixtures/vuln-app/argos.config.yaml --out /tmp/argos-out
+pnpm argos scan --config test/fixtures/vuln-app/fixed.config.yaml --out /tmp/argos-out   # 🔴 없음
+pnpm argos scan --config test/fixtures/vuln-app/block.config.yaml; echo $?                # 종료 코드 2
 pnpm argos --help
 ```
 
@@ -71,6 +75,7 @@ pnpm argos --help
 - 시드 결과를 직접 보려면 `seedDatabase()`를 호출한 뒤 `data.db`를 `sqlite3`로 열어 `SELECT * FROM datasets;`를 본다.
 
 - **http / matrix:** 페르소나별 요청(5초 타임아웃, 연결 오류는 SKIPPED), 페르소나 × 리소스 × 대상 조직 매트릭스, SPEC 6.4 observed 규칙, 마커 마스킹된 증거, Markdown 표.
+- **scan:** `argos scan [--config] [--checks] [--out] [--timeout]`. 임시 복사본 → 시드 → 앱 기동 → 매트릭스 → 점검 → `out/matrix.json`, `out/findings.json`. 종료 코드 0/1/2, 전체 타임아웃 기본 5분, 구현 전 점검(sqli, secrets)은 "not run"으로 표시. runner에 `beforeStart` 훅 추가(시드를 앱 기동 전에 실행).
 - **bola / unauth:** 매트릭스 칸에서 Finding 생성. 공격자·소유자 대조 요청이 성공하지 않으면 SKIPPED(죽은 앱·만료 토큰이 "안전"으로 보이지 않게).
 
 ## 알아둘 것
@@ -90,5 +95,5 @@ pnpm argos --help
 
 ## git
 
-- `feature/sun`: Step 4(bola/unauth)까지 push.
+- `feature/sun`: Step 5(scan)까지 push.
 - `main`: `9590e30`(계약 단계).

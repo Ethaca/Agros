@@ -20,6 +20,8 @@ export interface RunnerOptions {
   killGraceMs?: number;
   /** Suppress the isolation warning (tests). */
   quiet?: boolean;
+  /** Runs on the temp copy after copying and before the app starts (e.g. seeding the DB). */
+  beforeStart?: (workdir: string) => void | Promise<void>;
 }
 
 export interface RunningTarget {
@@ -94,6 +96,13 @@ export async function startTarget(cfg: Config, opts: RunnerOptions = {}): Promis
   } catch (e) {
     cleanup();
     throw new RunnerError(`cannot copy target dir ${srcDir}: ${(e as Error).message}`);
+  }
+
+  try {
+    await opts.beforeStart?.(workdir);
+  } catch (e) {
+    cleanup();
+    throw e;
   }
 
   const port = await freePort();
