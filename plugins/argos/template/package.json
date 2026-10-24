@@ -1,0 +1,14 @@
+{
+  "name": "argos-demo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Argos GitHub Actions demo: a multi-tenant API with no dependencies. Do not deploy.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node --no-warnings app.mjs",
+    "seed": "node --no-warnings seed.mjs"
+  }
+}
