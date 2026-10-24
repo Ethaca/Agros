@@ -10,7 +10,7 @@
   "scripts": {
     "argos": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test --test-timeout=30000 test/*.test.ts"
+    "test": "node --import tsx --test --test-timeout=60000 test/*.test.ts"
   },
   "engines": {
     "node": ">=22"

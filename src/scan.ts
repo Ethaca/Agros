@@ -1,8 +1,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { runMatrixChecks, MATRIX_CHECKS } from "./checks/index.js";
+import { CHECKS, runChecks } from "./checks/index.js";
 import { loadConfig, ConfigError } from "./config.js";
-import { renderMatrixMarkdown, runMatrix } from "./matrix.js";
+import { renderMatrixMarkdown, runMatrixDetailed } from "./matrix.js";
 import { startTarget } from "./runner.js";
 import { hashConfigText, seedDatabase, type SeedManifest } from "./seed.js";
 import { CheckName, type Finding, type Matrix, type Verdict } from "./types.js";
@@ -18,6 +18,8 @@ export interface ScanOptions {
   timeoutMs?: number;
   quiet?: boolean;
   log?: (line: string) => void;
+  /** Edit the temp copy before it is seeded and started (used by `fix` to re-verify a patch). */
+  patch?: (workdir: string) => void;
 }
 
 export interface ScanResult {
@@ -62,6 +64,7 @@ export async function runScan(opts: ScanOptions): Promise<ScanResult> {
         baseDir: dirname(configPath),
         quiet: opts.quiet,
         beforeStart: (workdir) => {
+          opts.patch?.(workdir);
           if (cfg.seed) manifest = seedDatabase(cfg, { workdir, seedKey });
         },
       });
@@ -70,8 +73,9 @@ export async function runScan(opts: ScanOptions): Promise<ScanResult> {
         await target.stop();
         throw new ScanError("aborted");
       }
-      const matrix = await runMatrix(cfg, target.baseUrl, manifest);
-      return { matrix, findings: runMatrixChecks(cfg, matrix) };
+      const { matrix, raw } = await runMatrixDetailed(cfg, target.baseUrl, manifest);
+      const findings = await runChecks({ cfg, baseUrl: target.baseUrl, matrix, raw, manifest });
+      return { matrix, findings };
     })();
     // If the timeout wins, `work` keeps running; swallow its late rejection.
     work.catch(() => undefined);
@@ -84,7 +88,7 @@ export async function runScan(opts: ScanOptions): Promise<ScanResult> {
 
     const counts = Object.fromEntries(VERDICTS.map((v) => [v, 0])) as Record<Verdict, number>;
     for (const f of findings) counts[f.verdict]++;
-    const notRun = cfg.checks.filter((c) => !MATRIX_CHECKS[c]);
+    const notRun = cfg.checks.filter((c) => !CHECKS[c]);
 
     log(renderMatrixMarkdown(matrix));
     log("");

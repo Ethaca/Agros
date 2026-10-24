@@ -43,9 +43,34 @@ test("--checks overrides config; unknown check is an error", async () => {
   await assert.rejects(run("argos.config.yaml", { checks: ["nope"] }), /unknown check "nope"/);
 });
 
-test("checks without an implementation are reported, not silently dropped", async () => {
-  const r = await run("argos.config.yaml", { checks: ["bola", "sqli", "secrets"] });
-  assert.deepEqual(r.notRun, ["sqli", "secrets"]);
+test("all four checks are implemented, nothing is silently dropped", async () => {
+  const r = await run("argos.config.yaml");
+  assert.deepEqual(r.notRun, []);
+  assert.deepEqual([...new Set(r.findings.map((f) => f.check))].sort(), ["bola", "secrets", "sqli", "unauth"]);
+});
+
+test("sqli (flaw 3) and secrets (flaw 4) are red on the flawed app, with masked proof", async () => {
+  const r = await run("argos.config.yaml");
+  const sqli = r.findings.find((f) => f.check === "sqli" && f.verdict === "VULNERABLE")!;
+  assert.equal(sqli.resourceId, "dataset-search");
+  assert.match(sqli.proof.note!, /control 200 \/ ' 500 \/ '' 200/);
+
+  const leaks = r.findings.filter((f) => f.check === "secrets" && f.verdict === "VULNERABLE");
+  assert.deepEqual(leaks.map((f) => f.persona).sort(), ["anonymous", "vendor1", "vendor2"]);
+  assert.ok(leaks.every((f) => f.column === "vendors.api_key" && f.proof.marker === "ARGOS_"));
+  // owner reading own key: reported as SUSPECTED, not red
+  assert.ok(r.findings.some((f) => f.check === "secrets" && f.verdict === "SUSPECTED" && /owner re-exposed/.test(f.detail)));
+
+  const dump = readFileSync(r.files.findings, "utf8") + readFileSync(r.files.matrix, "utf8");
+  assert.ok(!/ARGOS_SECRET_\d+_[0-9a-f]{6}/.test(dump), "no full secret marker in output files");
+});
+
+test("fixed app: sqli and secrets are green", async () => {
+  const r = await run("fixed.config.yaml");
+  assert.equal(r.counts.VULNERABLE, 0);
+  assert.equal(r.counts.SUSPECTED, 0, JSON.stringify(r.findings.filter((f) => f.verdict === "SUSPECTED")));
+  assert.equal(r.findings.find((f) => f.check === "sqli")!.verdict, "OK");
+  assert.ok(r.findings.filter((f) => f.check === "secrets").every((f) => f.verdict === "OK"));
 });
 
 test("original fixture dir is untouched (scan runs on a temp copy)", async () => {

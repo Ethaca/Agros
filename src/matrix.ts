@@ -81,24 +81,37 @@ export interface MatrixOptions {
   timeoutMs?: number;
 }
 
+export interface DetailedMatrix {
+  matrix: Matrix;
+  /** Full responses, index-aligned with matrix.cells (undefined when no request was sent). Never serialize these. */
+  raw: (HttpResult | undefined)[];
+}
+
+export async function runMatrix(cfg: Config, baseUrl: string, manifest: SeedManifest, opts: MatrixOptions = {}): Promise<Matrix> {
+  return (await runMatrixDetailed(cfg, baseUrl, manifest, opts)).matrix;
+}
+
 /** Build the full persona x resource matrix against a running target. Requests run sequentially. */
-export async function runMatrix(
+export async function runMatrixDetailed(
   cfg: Config,
   baseUrl: string,
   manifest: SeedManifest,
   opts: MatrixOptions = {},
-): Promise<Matrix> {
+): Promise<DetailedMatrix> {
   const cells: MatrixCell[] = [];
+  const raw: (HttpResult | undefined)[] = [];
   for (const p of plan(cfg)) {
     const { method, path } = parseRoute(p.resource.route);
     if (method !== "GET" && !p.resource.safe) {
       cells.push(skipped(p, p.resource.route, "non-GET route not marked safe: true"));
+      raw.push(undefined);
       continue;
     }
     const marker = p.target ? manifest.markers[p.resource.id]?.[p.target] : undefined;
     const rowId = p.target ? manifest.ids[p.resource.id]?.[p.target] : undefined;
     if (p.target && (marker === undefined || rowId === undefined)) {
       cells.push(skipped(p, p.resource.route, `no seeded row for org "${p.target}"`));
+      raw.push(undefined);
       continue;
     }
     const res: HttpResult = await sendAs(baseUrl, p.persona, method, fillPath(path, rowId ?? 1), {
@@ -120,11 +133,15 @@ export async function runMatrix(
       verdict: verdictFor(p.expected, observed),
       evidence: evidenceFor(res, marker, manifest),
     });
+    raw.push(res);
   }
   return {
-    personas: cfg.personas.map((x) => x.name),
-    resources: cfg.resources.map((r) => r.id),
-    cells,
+    matrix: {
+      personas: cfg.personas.map((x) => x.name),
+      resources: cfg.resources.map((r) => r.id),
+      cells,
+    },
+    raw,
   };
 }
 

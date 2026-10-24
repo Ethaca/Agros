@@ -25,6 +25,8 @@ const Resource = z.strictObject({
   public: z.boolean().optional(),
   /** Non-read routes are only exercised when explicitly marked safe. */
   safe: z.boolean().optional(),
+  /** Query-string parameters to test for SQL injection (sqli check). */
+  params: z.array(z.string().min(1)).optional(),
 });
 
 export const Config = z
