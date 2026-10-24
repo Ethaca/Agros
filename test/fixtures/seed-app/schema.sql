@@ -1,0 +1,11 @@
+CREATE TABLE datasets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  vendor_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  rows INTEGER NOT NULL
+);
+CREATE TABLE vendors (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  api_key TEXT NOT NULL
+);
