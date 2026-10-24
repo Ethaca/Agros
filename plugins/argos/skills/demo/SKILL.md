@@ -37,12 +37,12 @@ Show this intro verbatim (translate if the user is not Korean), then ask `시작
 "벤더 A가 벤더 B의 데이터를 볼 수 있나?"를 PR마다 직접 확인하고, 고칠 수 있으면 같은 공격으로 다시 검증한 수정을 PR로 올려줘요.
 
 **튜토리얼 6단계 (약 5분)**
-1. GitHub 로그인 — Argos는 내 GitHub 레포의 Actions에서 돌아요.
-2. 데모 앱 받기 — 공격해 볼 앱과 "누가 무엇을 볼 수 있나" 규칙이 필요해요.
-3. 취약한 PR 올리기 — 실제 개발처럼, 무해해 보이는 변경이 보안 구멍을 만들어요.
-4. Argos 실행 — PR이 올라오면 Argos가 자동으로 앱을 공격해요.
-5. 리포트 받기 — 무엇이 뚫렸고, 무엇을 고쳤는지 PR로 받아요.
-6. 정리 — 실습용 레포를 지워요.
+1. GitHub 로그인 — Argos는 GitHub Actions에서 돌아요. 로컬 설치 없이 gh 로그인만 있으면 돼요.
+2. 데모 앱 받기 — 실제 스타트업 SaaS 코드와 최대한 같게 만든 멀티테넌트 API예요. Argos는 Spring Boot와 Node.js(Express)를 지원하고, 이 데모는 Node 앱이에요.
+3. 취약한 PR 올리기 — 실무에서 흔한 실수 두 가지(조회 조건 누락, 응답에 비밀값 포함)를 평범한 정리 PR처럼 넣어요.
+4. Argos 실행 — 앱을 격리된 Docker에서 띄우고, 다른 벤더·비로그인 사용자로 모든 API를 직접 공격해요.
+5. 리포트 받기 — 뚫린 곳과 증거, 같은 공격으로 다시 검증한 수정 코드를 PR로 받아요.
+6. 정리 — 실습 레포를 지워요. 내 프로젝트에는 워크플로 파일 하나로 붙일 수 있어요.
 
 내 GitHub 계정에 비공개 레포 1개가 생기고, 마지막에 지울 수 있어요.
 ```
@@ -55,7 +55,7 @@ Show this intro verbatim (translate if the user is not Korean), then ask `시작
 - Fixes: no gh → `brew install gh`; not logged in → `! gh auth login -h github.com -s workflow`; missing scope → `! gh auth refresh -h github.com -s workflow`. Re-run check after.
 
 **[2/6] 데모 앱 받기** — first one `AskUserQuestion` with three questions: 레포 이름 (`argos-demo` Recommended), 공개 범위 (비공개 Recommended / 공개), 리포트 언어 (한국어 Recommended / English). If check said the name exists, recommend `argos-demo-<MMDD>`. Then `demo.sh create --repo <owner/name> --lang <ko|en> [--public]`.
-- 🎯 공격해 볼 앱(벤더마다 자기 데이터만 보는 API)과 그 규칙을 올린다.
+- 🎯 실제 스타트업 SaaS를 닮은 멀티테넌트 API(벤더마다 자기 데이터만 본다)를 올린다.
 - 💡 `argos.config.yaml` = "누가 무엇을 볼 수 있나" 규칙. Argos는 이 규칙대로 공격한다.
 
 **[3/6] 취약한 PR 올리기** — show the two changed lines of `${CLAUDE_PLUGIN_ROOT}/vulnerable.patch` (just the `-`/`+` lines), then `demo.sh pr --repo <owner/name> --lang <ko|en>`.
@@ -74,7 +74,7 @@ Show this intro verbatim (translate if the user is not Korean), then ask `시작
 
 **[6/6] 정리** — options `레포 삭제` / `남겨두기`. Delete: `demo.sh cleanup --repo <owner/name>`; if `delete_repo` scope is missing → `! gh auth refresh -h github.com -s delete_repo`, then retry.
 - 🎯 실습용 레포를 지운다.
-- 💡 내 레포에 쓰려면 `.github/workflows/argos.yml`과 `argos.config.yaml`을 복사하면 된다.
+- 💡 내 프로젝트에는 `.github/workflows/argos.yml` 하나면 된다. 설정이 없으면 Argos가 코드에서 초안을 만든다.
 
 ## End
 
