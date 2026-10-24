@@ -110,6 +110,29 @@ test("collection route scoped to the caller: same-org list without the colleague
   assert.equal(find(leaky.matrix.cells, "alice-member", "document-list", "orgA", "alice-member2")!.verdict, "VULNERABLE");
 });
 
+test("delete probes: a successful attack's deletion is restored, so later probes and the owner's control still run", async () => {
+  const documentDelete = {
+    id: "document-delete",
+    route: "DELETE /api/projects/{projectId}/documents/{documentId}",
+    owner: { table: "documents", column: "owner_id", scope: "user" },
+    pathParams: { projectId: { table: "projects" }, documentId: { table: "documents" } },
+    safe: true,
+    writeVerify: { table: "documents", column: "id" },
+    expect: { owner: "allow", other: "deny", anonymous: "deny" },
+  };
+  const over = { resources: [...springRaw().resources, documentDelete] };
+  const leaky = await scan({ noOwnerCheck: true }, over);
+  const cells = leaky.matrix.cells.filter((c) => c.resource === "document-delete");
+  // alice-member2's document is attacked by two colleagues; both see it, then its owner deletes it.
+  assert.equal(find(cells, "alice-member", "document-delete", "orgA", "alice-member2")!.verdict, "VULNERABLE");
+  assert.equal(find(cells, "alice-admin", "document-delete", "orgA", "alice-member2")!.verdict, "VULNERABLE");
+  const ownerControl = find(cells, "alice-member2", "document-delete", "orgA", "alice-member2")!;
+  assert.deepEqual([ownerControl.observed, ownerControl.verdict], ["allow", "OK"]);
+  assert.deepEqual(cells.filter((c) => c.verdict === "SKIPPED").map((c) => `${c.persona}->${c.targetUser}: ${c.evidence.note}`), []);
+  const ok = await scan({}, over);
+  assert.deepEqual(ok.matrix.cells.filter((c) => c.resource === "document-delete" && c.verdict !== "OK").map((c) => `${c.persona}->${c.targetUser}:${c.verdict}`), []);
+});
+
 test("missing role check: members reach admin-only API (function level)", async () => {
   const { matrix, findings } = await scan({ noRoleCheck: true });
   const c = find(matrix.cells, "alice-member", "admin-users", "orgA")!;
