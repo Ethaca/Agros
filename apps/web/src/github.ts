@@ -82,6 +82,23 @@ export class GitHub {
 
   listPulls(fullName: string) { return this.request<GhPull[]>('GET', `/repos/${fullName}/pulls?state=open&per_page=20`); }
 
+  async sourceArchive(fullName: string, sha: string): Promise<Response> {
+    if (!/^[\w.-]+\/[\w.-]+$/.test(fullName) || !/^[a-f0-9]{40}$/.test(sha)) throw new Error('Invalid snapshot reference');
+    const r = await fetch(`${API}/repos/${fullName}/tarball/${sha}`, {
+      headers: { Authorization: `Bearer ${this.token}`, 'User-Agent': 'argos', Accept: 'application/vnd.github+json' },
+      redirect: 'manual', signal: AbortSignal.timeout(30_000),
+    });
+    if (r.status === 200) return r;
+    if (r.status !== 302) throw new Error(`GitHub snapshot API status ${r.status}`);
+    const url = new URL(r.headers.get('location') ?? '');
+    if (url.protocol !== 'https:' || url.hostname !== 'codeload.github.com') throw new Error('Unexpected snapshot redirect');
+    // Never forward the OAuth token to redirected hosts or the laptop worker.
+    // Workers supports only follow/manual; explicitly reject any second redirect.
+    const archive = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(30_000) });
+    if (!archive.ok) throw new Error(`GitHub snapshot download status ${archive.status}`);
+    return archive;
+  }
+
   listPullFiles(fullName: string, n: number) { return this.paginate<ChangedFile>(`/repos/${fullName}/pulls/${n}/files`, 3000); }
 
   async listTreePaths(fullName: string, sha: string): Promise<string[]> {
@@ -94,9 +111,9 @@ export class GitHub {
     return this.request<string>('GET', `/repos/${fullName}/contents/${p}?ref=${ref}`, undefined, 'application/vnd.github.raw+json');
   }
 
-  createStatus(fullName: string, sha: string, state: 'pending' | 'success' | 'failure' | 'error', description: string, targetUrl?: string) {
+  createStatus(fullName: string, sha: string, state: 'pending' | 'success' | 'failure' | 'error', description: string, targetUrl?: string, context = 'argos/security') {
     return this.request('POST', `/repos/${fullName}/statuses/${sha}`, {
-      state, description: description.slice(0, 140), context: 'argos/security', target_url: targetUrl,
+      state, description: description.slice(0, 140), context, target_url: targetUrl,
     });
   }
 

@@ -9,7 +9,7 @@ import {
   ExclamationTriangleIcon, LockClosedIcon, MagnifyingGlassIcon, SignalIcon,
 } from '@heroicons/react/16/solid';
 import { useEffect, useMemo, useState } from 'react';
-import type { AnalysisResult } from '../types.ts';
+import type { AnalysisResult, SandboxView } from '../types.ts';
 import { LANG_NAMES, LANGS, type Lang } from '../i18n.ts';
 import { Findings } from './findings.tsx';
 import { BACKDROP, Btn, btnClass, Card, CardHeader, cx, DIALOG, FOCUS, INPUT, ITEM, LABEL, PageHeader, POPUP, PostForm, SeverityPill, Shell, submitForm, type BaseProps } from './kit.tsx';
@@ -273,15 +273,42 @@ export function Dashboard({ repos, recent, ...base }: DashboardProps) {
 
 // ---------- 검사 결과 ----------
 
-export interface ScanPageProps extends BaseProps { scan: ScanSummary & { error: string | null }; result: AnalysisResult | null }
+export interface ScanPageProps extends BaseProps { scan: ScanSummary & { error: string | null }; result: AnalysisResult | null; sandbox?: SandboxView | null }
 
-export function ScanPage({ scan, result, ...base }: ScanPageProps) {
+function SandboxPanel({ sandbox }: { sandbox: SandboxView }) {
+  const result = sandbox.result;
+  const pending = ['queued', 'running', 'publishing'].includes(sandbox.status);
+  return (
+    <Card className="mb-6 overflow-hidden">
+      <CardHeader title="Docker 실제 실행 검사" description={`상태: ${sandbox.status} · 코드 리뷰와 별도로 수행하는 HTTP 접근 검사입니다.`} />
+      <div className="grid gap-3 px-5 py-4 text-sm text-gray-700">
+        <p>SQL 분석·DB 준비와 앱 실행을 네트워크 없는 컨테이너로 분리합니다. 소스는 읽기 전용이며 GitHub 토큰과 노트북 폴더를 전달하지 않습니다.</p>
+        {pending && <p>전용 로컬 Worker가 처리합니다. 완료되면 이 화면을 갱신합니다.</p>}
+        {result?.status !== 'completed' && !pending && <p className="text-red-700">검증 미완료: {result?.reason ?? '작업이 취소되거나 실행을 완료하지 못했습니다.'} 안전 또는 통과를 의미하지 않습니다.</p>}
+        {result?.status === 'completed' && <>
+          <p>정상 사용자 자신의 데이터 접근 대조 통과 · {result.matrix!.cells.length}칸 검사 · {result.durationMs}ms</p>
+          <p>기대 권한은 {result.policy === 'repository' ? '저장소 설정' : '자동 초안'} 기준입니다. 업무상 올바른 정책인지는 검토가 필요합니다.</p>
+          <div className="overflow-x-auto"><table className="min-w-full text-left text-xs"><thead><tr>{['검사', '정책 위반', '의심', '문제 미발견', '미검증'].map((h) => <th key={h} className="p-2">{h}</th>)}</tr></thead><tbody>
+            {['bola', 'unauth', 'sqli', 'secrets'].map((check) => <tr key={check}><td className="p-2 font-mono">{check}</td>{['VULNERABLE', 'SUSPECTED', 'OK', 'SKIPPED'].map((v) => <td key={v} className="p-2">{result.findings.filter((f) => f.check === check && f.verdict === v).length}</td>)}</tr>)}
+          </tbody></table></div>
+          <details><summary className="cursor-pointer">전체 접근 결과표</summary><div className="mt-2 overflow-x-auto"><table className="min-w-full text-left text-xs"><thead><tr>{['사용자', '리소스', '대상 조직', '기대', '실제', '판정', 'HTTP'].map((h) => <th key={h} className="p-2">{h}</th>)}</tr></thead><tbody>
+            {result.matrix!.cells.map((c, i) => <tr key={i}>{[c.persona, c.resource, c.target ?? '-', c.expected, c.observed, c.verdict, c.evidence.status ?? '-'].map((v, j) => <td key={j} className="p-2">{v}</td>)}</tr>)}
+          </tbody></table></div></details>
+          <details><summary className="cursor-pointer">검사한 경로와 미검증 범위</summary><ul className="mt-2 list-disc pl-5">{result.routes.map((r) => <li key={r}>{r}</li>)}{result.untested.map((r) => <li key={r}>미검증: {r}</li>)}</ul></details>
+        </>}
+        <p className="text-xs text-gray-500">첫 지원은 Express + node:sqlite + 설정 가능한 Bearer 인증입니다. SSRF 공격, 외부 서비스, 역할·쓰기 검사와 자동 수정은 실행하지 않습니다.</p>
+      </div>
+    </Card>
+  );
+}
+
+export function ScanPage({ scan, result, sandbox, ...base }: ScanPageProps) {
   // 검사 중이면 5초마다 새로 고친다
   useEffect(() => {
-    if (scan.status !== 'running') return;
+    if (scan.status !== 'running' && !['queued', 'running', 'publishing'].includes(sandbox?.status ?? '')) return;
     const t = setTimeout(() => location.reload(), 5000);
     return () => clearTimeout(t);
-  }, [scan.status]);
+  }, [scan.status, sandbox?.status]);
   const prUrl = `https://github.com/${scan.repo}/pull/${scan.prNumber}`;
   return (
     <Shell {...base} active="repos">
@@ -296,6 +323,7 @@ export function ScanPage({ scan, result, ...base }: ScanPageProps) {
       {scan.status === 'error' && (
         <Card className="mb-4 flex items-center gap-2 px-5 py-4 text-sm text-red-700"><ExclamationTriangleIcon aria-hidden="true" className="size-4" />오류: {scan.error}</Card>
       )}
+      {sandbox && <SandboxPanel sandbox={sandbox} />}
       {result && <Findings result={result} />}
     </Shell>
   );

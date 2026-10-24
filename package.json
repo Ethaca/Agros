@@ -9,6 +9,8 @@
   },
   "scripts": {
     "argos": "tsx src/cli.ts",
+    "sandbox:build": "docker build -f sandbox/Dockerfile -t argos-local-runtime:dev .",
+    "sandbox:worker": "tsx src/sandbox/worker.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test --test-timeout=60000 test/*.test.ts && node --import tsx --test --test-timeout=180000 test/scenarios/*.test.ts",
     "test:unit": "node --import tsx --test --test-timeout=60000 test/*.test.ts",

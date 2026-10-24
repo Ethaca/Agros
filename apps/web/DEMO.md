@@ -1,6 +1,6 @@
 # 로컬 GitHub 연동 데모
 
-기존 웹앱은 GitHub **OAuth App**으로 로그인한다. PR 코드를 분석하는 데모이며 고객 앱이나 Docker를 실행하지 않는다. GitHub App 설치 방식과 루트 CLI의 동적 검사는 별도 구성이다.
+기존 웹앱은 GitHub **OAuth App**으로 로그인한다. 기본은 PR 코드 분석이며, 실제 실행이 필요하면 [노트북 Docker Worker](../../docs/LOCAL_SANDBOX.md)를 추가한다. GitHub App 설치 방식은 별도 계획이다.
 
 ## 실행
 
