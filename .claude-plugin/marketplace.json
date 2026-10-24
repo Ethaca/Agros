@@ -1,0 +1,18 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "argos",
+  "description": "Argos: prove, vouch, and plug access-control checks.",
+  "owner": {
+    "name": "Ethaca",
+    "url": "https://github.com/Ethaca"
+  },
+  "plugins": [
+    {
+      "name": "argos",
+      "description": "Try Argos on your own GitHub account in about 5 minutes: a PR that breaks access control, Argos in GitHub Actions, and a report PR with a verified fix.",
+      "source": "./plugins/argos",
+      "category": "security",
+      "tags": ["security", "github-actions", "access-control", "bola", "demo"]
+    }
+  ]
+}

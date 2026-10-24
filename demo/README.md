@@ -23,6 +23,16 @@ bash manual-exploit.sh ../realistic-app
 
 `realistic-app`은 세 벤더, 데이터셋, 작업, 공개 제품 목록, 벤더 프로필, 내보내기 흐름을 가진 안전한 기준 앱이다. 다른 벤더의 데이터는 404, 미인증 요청은 401로 처리하며 민감 필드는 응답에 포함하지 않는다.
 
+## GitHub Actions 데모 — PR 하나로 체험 (Claude Code 플러그인)
+
+내 계정에 데모 레포를 만들고 취약 PR을 올리면, Actions의 Argos가 리포트와 검증된 수정이 담긴 PR을 연다. Claude Code 플러그인 `argos`로 배포한다: [plugins/argos/README.md](../plugins/argos/README.md).
+
+```
+/plugin marketplace add Ethaca/Agros
+/plugin install argos@argos
+/argos:demo
+```
+
 ## Spring Boot 데모 — 설정 0줄, 명령 1개
 
 `spring-workspace/`는 Spring Boot 3.5 + Security JWT + JPA + PostgreSQL + Flyway(Gradle) 앱이고, 권한 결함 세 개(다른 조직 접근, 동료 문서 접근, 멤버의 관리자 기능 사용)가 들어 있다. Argos 설정 파일은 넣지 않았다: `argos init`이 코드에서 만든다.

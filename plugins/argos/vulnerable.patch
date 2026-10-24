@@ -1,0 +1,24 @@
+diff --git a/app.mjs b/app.mjs
+index 31ed76e..45d76bc 100644
+--- a/app.mjs
++++ b/app.mjs
+@@ -37,7 +37,8 @@ app.get("/api/datasets", auth, (req, res) => {
+ });
+ 
+ app.get("/api/datasets/:id", auth, (req, res) => {
+-  const row = db.prepare("SELECT * FROM datasets WHERE id = ? AND vendor_id = ?").get(req.params.id, req.user.vendor_id);
++  // Simplified: the id is unique, so the vendor filter is redundant.
++  const row = db.prepare("SELECT * FROM datasets WHERE id = ?").get(req.params.id);
+   if (!row) return res.status(404).json({ error: "not found" });
+   res.json(row);
+ });
+@@ -62,7 +63,8 @@ app.get("/api/tasks/:id", auth, (req, res) => {
+ 
+ // Vendor directory: logged-in vendors may see each other's public profile (never the API key).
+ app.get("/api/vendors/:id", auth, (req, res) => {
+-  const row = db.prepare("SELECT id, name, contact_email FROM vendors WHERE id = ?").get(req.params.id);
++  // Return the full profile so the dashboard can show every field.
++  const row = db.prepare("SELECT * FROM vendors WHERE id = ?").get(req.params.id);
+   if (!row) return res.status(404).json({ error: "not found" });
+   res.json(row);
+ });
